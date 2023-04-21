@@ -1,5 +1,5 @@
 [package]
-name = "sha"
+name = "minigeth"
 version = "0.12.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 clap = "4.0"
 risc0-zkvm = { path = "../../risc0/zkvm" }
 serde = "1.0"
-sha-methods = { path = "methods" }
+# minigeth-methods = { path = "methods" }
 
 [dev-dependencies]
 hex = "0.4"

@@ -12,6 +12,7 @@ members = [
     "password-checker",
     "password-checker/core",
     "sha",
+    "minigeth",
     "waldo",
     "waldo/core",
     "wordle",

@@ -2008,6 +2008,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
+name = "minigeth"
+version = "0.12.0"
+dependencies = [
+ "clap 4.2.1",
+ "hex",
+ "risc0-zkvm",
+ "serde",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

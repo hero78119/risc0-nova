@@ -12,22 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+};
+
 use clap::{Arg, Command};
 use risc0_zkvm::{
+    prove::default_hal,
     serde::{from_slice, to_vec},
     sha::Digest,
     Executor, ExecutorEnv,
 };
-use sha_methods::HASH_ELF;
 
 fn provably_hash(input: &str) -> Digest {
     let env = ExecutorEnv::builder()
         .add_input(&to_vec(input).unwrap())
         .build();
 
-    let mut exec = Executor::from_elf(env, HASH_ELF).unwrap();
+    let f = File::open("minigeth.bin").unwrap();
+    let mut reader = BufReader::new(f);
+    let mut buffer = Vec::new();
+
+    // Read file into vector.
+    reader.read_to_end(&mut buffer).unwrap();
+
+    let mut exec = Executor::from_elf(env, &buffer).unwrap();
     let session = exec.run().unwrap();
-    let receipt = session.prove().unwrap();
+
+    let (hal, eval) = default_hal();
+    let receipt = session.prove(hal.as_ref(), &eval).unwrap();
 
     from_slice(&receipt.journal).unwrap()
 }
