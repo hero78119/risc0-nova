@@ -93,9 +93,14 @@ impl OpCode {
                 0x0 => OpCode::new(insn, insn_pc, "LB", 24, 1),
                 0x1 => OpCode::new(insn, insn_pc, "LH", 25, 1),
                 0x2 => OpCode::new(insn, insn_pc, "LW", 26, 1),
+                0x3 => OpCode::new(insn, insn_pc, "LD", 26, 1), // RV64I
                 0x4 => OpCode::new(insn, insn_pc, "LBU", 27, 1),
                 0x5 => OpCode::new(insn, insn_pc, "LHU", 28, 1),
-                _ => unreachable!(),
+                _ => {
+                    println!("opcode {:#8x}", insn);
+                    log::debug!("opcode {:?}", opcode);
+                    unreachable!()
+                }
             },
             0b0010011 => match funct3 {
                 0x0 => OpCode::new(insn, insn_pc, "ADDI", 7, 1),

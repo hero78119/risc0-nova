@@ -31,8 +31,8 @@ impl Program {
     pub fn load_elf(input: &[u8], max_mem: u32) -> Result<Program> {
         let mut image: BTreeMap<u32, u32> = BTreeMap::new();
         let elf = ElfBytes::<LittleEndian>::minimal_parse(input)?;
-        if elf.ehdr.class != Class::ELF32 {
-            bail!("Not a 32-bit ELF");
+        if elf.ehdr.class != Class::ELF64 {
+            bail!("Not a 64-bit ELF");
         }
         if elf.ehdr.e_machine != elf::abi::EM_RISCV {
             bail!("Invalid machine type, must be RISC-V");
