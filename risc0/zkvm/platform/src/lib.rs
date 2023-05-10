@@ -20,6 +20,7 @@ pub mod memory;
 #[macro_use]
 pub mod syscall;
 
+pub const DOUBLE_WORD_SIZE: usize = core::mem::size_of::<u64>();
 pub const WORD_SIZE: usize = core::mem::size_of::<u32>();
 pub const PAGE_SIZE: usize = 1024;
 

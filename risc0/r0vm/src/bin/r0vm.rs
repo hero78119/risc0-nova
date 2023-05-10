@@ -78,17 +78,17 @@ fn main() {
     let session = exec.run().unwrap();
 
     let (hal, eval) = default_hal();
-    let receipt = session.prove(hal.as_ref(), &eval).unwrap();
+    // let receipt = session.prove(hal.as_ref(), &eval).unwrap();
 
-    let receipt_data = encode_receipt(&receipt);
-    if let Some(receipt_file) = args.receipt.as_ref() {
-        fs::write(receipt_file, receipt_data.as_slice()).expect("Unable to write receipt file");
-        if args.verbose > 0 {
-            eprintln!(
-                "Wrote {} bytes of receipt to {}",
-                receipt_data.len(),
-                receipt_file.display()
-            );
-        }
-    }
+    // let receipt_data = encode_receipt(&receipt);
+    // if let Some(receipt_file) = args.receipt.as_ref() {
+    //     fs::write(receipt_file, receipt_data.as_slice()).expect("Unable to
+    // write receipt file");     if args.verbose > 0 {
+    //         eprintln!(
+    //             "Wrote {} bytes of receipt to {}",
+    //             receipt_data.len(),
+    //             receipt_file.display()
+    //         );
+    //     }
+    // }
 }

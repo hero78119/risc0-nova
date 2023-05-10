@@ -52,13 +52,13 @@ where
     // Circuit inputs/outputs
     pub io: CpuBuffer<F::Elem>,
     // Power of 2
-    pub po2: usize,
+    // pub po2: usize,
     // steps = 2^po2 is the total number of cycles in the zkVM execution
     pub steps: usize,
     // Indicates whether the guest program has already halted
     pub halted: bool,
     // Maximum allowable execution length of guest program
-    max_po2: usize,
+    // max_po2: usize,
     // Counter for zkVM execution
     pub cycle: usize,
 }
@@ -72,11 +72,11 @@ where
     pub fn new(
         circuit: &'static C,
         handler: S,
-        min_po2: usize,
-        max_po2: usize,
+        // min_po2: usize,
+        // max_po2: usize,
         io: &[F::Elem],
     ) -> Self {
-        let po2 = max(min_po2, MIN_PO2);
+        let po2 = MIN_PO2;
         let taps = circuit.get_taps();
         let code_size = taps.group_size(REGISTER_GROUP_CODE);
         let data_size = taps.group_size(REGISTER_GROUP_DATA);
@@ -91,10 +91,10 @@ where
             data: CpuBuffer::from_fn(steps * data_size, |_| F::Elem::INVALID),
             data_size,
             io: CpuBuffer::from(Vec::from(io)),
-            po2,
+            // po2,
             steps,
             halted: false,
-            max_po2,
+            // max_po2,
             cycle: 0,
         }
     }
@@ -132,16 +132,16 @@ where
 
     pub fn expand(&mut self) -> Result<()> {
         debug!("expand");
-        if self.steps >= (1 << self.max_po2) {
-            bail!("Cannot expand, max po2 of {} reached.", self.max_po2);
-        }
+        // if self.steps >= (1 << self.max_po2) {
+        //     bail!("Cannot expand, max po2 of {} reached.", self.max_po2);
+        // }
         let new_code = self.expand_buf(&self.code, F::Elem::ZERO, self.code_size);
         self.code = new_code;
 
         let new_data = self.expand_buf(&self.data, F::Elem::INVALID, self.data_size);
         self.data = new_data;
 
-        self.po2 += 1;
+        // self.po2 += 1;
         self.steps *= 2;
         Ok(())
     }

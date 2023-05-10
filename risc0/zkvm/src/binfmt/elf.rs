@@ -20,16 +20,16 @@ use elf::{endian::LittleEndian, file::Class, ElfBytes};
 /// A RISC Zero program
 pub struct Program {
     /// The entrypoint of the program
-    pub entry: u32,
+    pub entry: u64,
 
     /// The initial memory image
-    pub image: BTreeMap<u32, u32>,
+    pub image: BTreeMap<u64, u32>,
 }
 
 impl Program {
     /// Initialize a RISC Zero Program from an appropriate ELF file
-    pub fn load_elf(input: &[u8], max_mem: u32) -> Result<Program> {
-        let mut image: BTreeMap<u32, u32> = BTreeMap::new();
+    pub fn load_elf(input: &[u8], max_mem: u64) -> Result<Program> {
+        let mut image: BTreeMap<u64, u32> = BTreeMap::new();
         let elf = ElfBytes::<LittleEndian>::minimal_parse(input)?;
         if elf.ehdr.class != Class::ELF64 {
             bail!("Not a 64-bit ELF");
@@ -40,7 +40,7 @@ impl Program {
         if elf.ehdr.e_type != elf::abi::ET_EXEC {
             bail!("Invalid ELF type, must be executable");
         }
-        let entry: u32 = elf.ehdr.e_entry.try_into()?;
+        let entry: u64 = elf.ehdr.e_entry.try_into()?;
         if entry >= max_mem || entry % 4 != 0 {
             bail!("Invalid entrypoint");
         }
@@ -49,16 +49,16 @@ impl Program {
             bail!("Too many program headers");
         }
         for segment in segments.iter().filter(|x| x.p_type == elf::abi::PT_LOAD) {
-            let file_size: u32 = segment.p_filesz.try_into()?;
+            let file_size: u64 = segment.p_filesz.try_into()?;
             if file_size >= max_mem {
                 bail!("Invalid segment file_size");
             }
-            let mem_size: u32 = segment.p_memsz.try_into()?;
+            let mem_size: u64 = segment.p_memsz.try_into()?;
             if mem_size >= max_mem {
                 bail!("Invalid segment mem_size");
             }
-            let vaddr: u32 = segment.p_vaddr.try_into()?;
-            let offset: u32 = segment.p_offset.try_into()?;
+            let vaddr: u64 = segment.p_vaddr.try_into()?;
+            let offset: u64 = segment.p_offset.try_into()?;
             for i in (0..mem_size).step_by(4) {
                 let addr = vaddr.checked_add(i).context("Invalid segment vaddr")?;
                 if i >= file_size {

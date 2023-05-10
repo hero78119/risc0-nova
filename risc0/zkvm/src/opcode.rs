@@ -38,7 +38,7 @@ pub enum MajorType {
 
 pub struct OpCode {
     pub insn: u32,
-    pub insn_pc: u32,
+    pub insn_pc: u64,
     pub mnemonic: &'static str,
     pub major: MajorType,
     pub minor: u32,
@@ -52,7 +52,7 @@ impl MajorType {
 }
 
 impl OpCode {
-    fn new(insn: u32, insn_pc: u32, mnemonic: &'static str, idx: u32, cycles: usize) -> Self {
+    fn new(insn: u32, insn_pc: u64, mnemonic: &'static str, idx: u32, cycles: usize) -> Self {
         Self {
             insn,
             insn_pc,
@@ -65,7 +65,7 @@ impl OpCode {
 
     fn with_major_minor(
         insn: u32,
-        insn_pc: u32,
+        insn_pc: u64,
         mnemonic: &'static str,
         major: MajorType,
         minor: u32,
@@ -81,13 +81,13 @@ impl OpCode {
         }
     }
 
-    pub fn decode(insn: u32, insn_pc: u32) -> Result<Self> {
+    pub fn decode(insn: u32, insn_pc: u64) -> Result<Self> {
         let opcode = insn & 0x0000007f;
         let rs2 = (insn & 0x01f00000) >> 20;
         let funct3 = (insn & 0x00007000) >> 12;
         let funct7 = (insn & 0xfe000000) >> 25;
         // log::debug!("decode: 0x{word:08X}");
-
+        println!("decode: 0x{insn:08x} at pc 0x{insn_pc:08x}");
         Ok(match opcode {
             0b0000011 => match funct3 {
                 0x0 => OpCode::new(insn, insn_pc, "LB", 24, 1),
@@ -122,6 +122,7 @@ impl OpCode {
                 0x0 => OpCode::new(insn, insn_pc, "SB", 29, 1),
                 0x1 => OpCode::new(insn, insn_pc, "SH", 30, 1),
                 0x2 => OpCode::new(insn, insn_pc, "SW", 31, 1),
+                0x3 => OpCode::new(insn, insn_pc, "SD", 31, 1),
                 _ => unreachable!(),
             },
             0b0110011 => match (funct3, funct7) {
@@ -177,7 +178,7 @@ impl OpCode {
     }
 
     #[allow(dead_code)]
-    pub fn debug(&self, cycle: usize, insn_pc: u32) -> String {
+    pub fn debug(&self, cycle: usize, insn_pc: u64) -> String {
         let mut outputter = InstructionStringOutputter { insn_pc };
         let desc = process_instruction(&mut outputter, self.insn);
         format!(

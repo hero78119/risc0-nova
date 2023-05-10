@@ -62,7 +62,7 @@ pub struct Session {
     pub segments: Vec<Segment>,
 
     /// The data publicly committed by the guest program.
-    pub journal: Vec<u8>,
+    // pub journal: Vec<u8>,
 
     /// The [ExitCode] of the session.
     pub exit_code: ExitCode,
@@ -80,21 +80,20 @@ pub struct Session {
 pub struct Segment {
     pub(crate) pre_image: MemoryImage,
     pub(crate) post_image_id: Digest,
-    pub(crate) pc: u32,
-    pub(crate) faults: PageFaults,
-    pub(crate) syscalls: Vec<SyscallRecord>,
+    pub(crate) pc: u64,
+    // pub(crate) faults: PageFaults,
+    // pub(crate) syscalls: Vec<SyscallRecord>,
     pub(crate) exit_code: ExitCode,
-
-    /// The number of cycles in powers of 2.
-    pub po2: usize,
+    // The number of cycles in powers of 2.
+    // pub po2: usize,
 }
 
 impl Session {
     /// Construct a new [Session] from its constituent components.
-    pub fn new(segments: Vec<Segment>, journal: Vec<u8>, exit_code: ExitCode) -> Self {
+    pub fn new(segments: Vec<Segment>, exit_code: ExitCode) -> Self {
         Self {
             segments,
-            journal,
+            // journal,
             exit_code,
         }
     }
@@ -105,20 +104,20 @@ impl Segment {
     pub(crate) fn new(
         pre_image: MemoryImage,
         post_image_id: Digest,
-        pc: u32,
-        faults: PageFaults,
-        syscalls: Vec<SyscallRecord>,
+        pc: u64,
+        // faults: PageFaults,
+        // syscalls: Vec<SyscallRecord>,
         exit_code: ExitCode,
-        po2: usize,
+        // po2: usize,
     ) -> Self {
         Self {
             pre_image,
             post_image_id,
             pc,
-            faults,
-            syscalls,
+            // faults,
+            // syscalls,
             exit_code,
-            po2,
+            // po2,
         }
     }
 }

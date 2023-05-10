@@ -19,16 +19,16 @@ use core::{cmp::min, ptr::null_mut};
 use crate::WORD_SIZE;
 
 pub mod ecall {
-    pub const HALT: u32 = 0;
-    pub const OUTPUT: u32 = 1;
-    pub const SOFTWARE: u32 = 2;
-    pub const SHA: u32 = 3;
+    pub const HALT: u64 = 0;
+    pub const OUTPUT: u64 = 1;
+    pub const SOFTWARE: u64 = 2;
+    pub const SHA: u64 = 3;
 }
 
 pub mod halt {
-    pub const TERMINATE: u32 = 0;
-    pub const PAUSE: u32 = 1;
-    pub const SPLIT: u32 = 2;
+    pub const TERMINATE: u64 = 0;
+    pub const PAUSE: u64 = 1;
+    pub const SPLIT: u64 = 2;
 }
 
 pub mod reg_abi {
@@ -68,6 +68,7 @@ pub mod reg_abi {
     pub const REG_MAX: usize = 32; // maximum number of registers
 }
 
+// TODO what's this?
 pub const DIGEST_WORDS: usize = 8;
 pub const DIGEST_BYTES: usize = WORD_SIZE * DIGEST_WORDS;
 

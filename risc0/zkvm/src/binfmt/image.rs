@@ -26,49 +26,49 @@ use serde::{Deserialize, Serialize};
 use crate::{binfmt::elf::Program, sha};
 
 /// Compute `ceil(a / b)` via truncated integer division.
-const fn div_ceil(a: u32, b: u32) -> u32 {
+const fn div_ceil(a: u64, b: u64) -> u64 {
     (a + b - 1) / b
 }
 
 /// Round `a` up to the nearest multipe of `b`.
-const fn round_up(a: u32, b: u32) -> u32 {
+const fn round_up(a: u64, b: u64) -> u64 {
     div_ceil(a, b) * b
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PageTableInfo {
-    pub page_size: u32,
-    page_table_addr: u32,
-    _page_table_size: u32,
-    root_addr: u32,
-    pub root_idx: u32,
-    root_page_addr: u32,
-    num_pages: u32,
-    pub num_root_entries: u32,
-    _layers: Vec<u32>,
+    pub page_size: u64,
+    page_table_addr: u64,
+    _page_table_size: u64,
+    root_addr: u64,
+    pub root_idx: u64,
+    root_page_addr: u64,
+    num_pages: u64,
+    pub num_root_entries: u64,
+    _layers: Vec<u64>,
 }
 
 impl PageTableInfo {
-    pub fn new(page_table_addr: u32, page_size: u32) -> Self {
+    pub fn new(page_table_addr: u64, page_size: u64) -> Self {
         let max_mem = page_table_addr;
         assert!(max_mem >= page_size);
 
         let mut layers = Vec::new();
-        let mut page_table_size = 0u32;
+        let mut page_table_size = 0u64;
         let mut remain = max_mem;
         while remain >= page_size {
             let num_pages = remain / page_size;
-            remain = num_pages * DIGEST_BYTES as u32;
+            remain = num_pages * DIGEST_BYTES as u64;
             layers.push(remain);
             page_table_size += remain;
         }
         let max_mem = max_mem + page_table_size;
         let num_pages = max_mem / page_size;
-        let page_table_size = round_up(page_table_size, BLOCK_BYTES as u32);
+        let page_table_size = round_up(page_table_size, BLOCK_BYTES as u64);
         let root_addr = page_table_addr + page_table_size;
         let root_idx = root_addr / page_size;
         let root_page_addr = root_idx * page_size;
-        let num_root_entries = (root_addr - root_page_addr) / DIGEST_BYTES as u32;
+        let num_root_entries = (root_addr - root_page_addr) / DIGEST_BYTES as u64;
         assert_eq!(root_idx, num_pages);
 
         log::debug!("root_page_addr: 0x{root_page_addr:08x}, root_addr: 0x{root_addr:08x}");
@@ -86,16 +86,16 @@ impl PageTableInfo {
         }
     }
 
-    pub fn get_page_addr(&self, page_idx: u32) -> u32 {
+    pub fn get_page_addr(&self, page_idx: u64) -> u64 {
         page_idx * self.page_size
     }
 
-    pub fn get_page_index(&self, addr: u32) -> u32 {
+    pub fn get_page_index(&self, addr: u64) -> u64 {
         addr / self.page_size
     }
 
-    pub fn get_page_entry_addr(&self, page_idx: u32) -> u32 {
-        self.page_table_addr + page_idx * DIGEST_BYTES as u32
+    pub fn get_page_entry_addr(&self, page_idx: u64) -> u64 {
+        self.page_table_addr + page_idx * DIGEST_BYTES as u64
     }
 }
 
@@ -119,7 +119,7 @@ impl MemoryImage {
     /// The result is a MemoryImage with the ELF of `program` loaded (but
     /// execution not yet begun), and with the page table Merkle tree
     /// constructed.
-    pub fn new(program: &Program, page_size: u32) -> Self {
+    pub fn new(program: &Program, page_size: u64) -> Self {
         let mut buf = vec![0_u8; MEM_SIZE];
 
         // Load the ELF into the memory image.
@@ -132,7 +132,7 @@ impl MemoryImage {
         }
 
         // Compute the page table hashes except for the very last root hash.
-        let info = PageTableInfo::new(PAGE_TABLE.start() as u32, page_size);
+        let info = PageTableInfo::new(PAGE_TABLE.start() as u64, page_size);
         let mut img = Self { buf, info };
         img.hash_pages();
         img
@@ -141,11 +141,11 @@ impl MemoryImage {
     /// Calculate and update the image merkle tree within this image.
     pub fn hash_pages(&mut self) {
         for i in 0..self.info.num_pages {
-            let page_addr = self.info.get_page_addr(i as u32);
+            let page_addr = self.info.get_page_addr(i as u64);
             let page =
                 &self.buf[page_addr as usize..page_addr as usize + self.info.page_size as usize];
             let digest = hash_page(page);
-            let entry_addr = self.info.get_page_entry_addr(i as u32);
+            let entry_addr = self.info.get_page_entry_addr(i as u64);
             self.buf[entry_addr as usize..entry_addr as usize + DIGEST_BYTES]
                 .copy_from_slice(digest.as_bytes());
         }

@@ -59,8 +59,11 @@ use risc0_zkp::{
 };
 use risc0_zkvm_platform::WORD_SIZE;
 
-use self::{exec::MachineContext, loader::Loader};
-use crate::{ControlId, Segment, SegmentReceipt, Session, SessionReceipt, CIRCUIT};
+use self::loader::Loader;
+use crate::{
+    prove::exec::MachineContext, ControlId, Segment, SegmentReceipt, Session, SessionReceipt,
+    CIRCUIT,
+};
 
 /// HAL creation functions for CUDA.
 #[cfg(feature = "cuda")]
@@ -161,30 +164,30 @@ cfg_if::cfg_if! {
     }
 }
 
-impl Session {
-    /// For each segment, call [Segment::prove] and collect the receipts.
-    pub fn prove<H, E>(&self, hal: &H, eval: &E) -> Result<SessionReceipt>
-    where
-        H: Hal<Field = BabyBear, Elem = Elem, ExtElem = ExtElem>,
-        <<H as Hal>::HashSuite as HashSuite<BabyBear>>::HashFn: ControlId,
-        E: EvalCheck<H>,
-    {
-        let mut segments = Vec::new();
-        for segment in self.segments.iter() {
-            segments.push(segment.prove(hal, eval)?);
-        }
-        let receipt = SessionReceipt {
-            segments,
-            journal: self.journal.clone(),
-        };
-        let image_id = self.segments[0].pre_image.get_root();
-        let hal = CpuVerifyHal::<_, H::HashSuite, _>::new(&crate::CIRCUIT);
-        receipt
-            .verify_with_hal(&hal, image_id)
-            .map_err(|err| anyhow!("Verification error: {err}"))?;
-        Ok(receipt)
-    }
-}
+// impl Session {
+//     /// For each segment, call [Segment::prove] and collect the receipts.
+//     pub fn prove<H, E>(&self, hal: &H, eval: &E) -> Result<SessionReceipt>
+//     where
+//         H: Hal<Field = BabyBear, Elem = Elem, ExtElem = ExtElem>,
+//         <<H as Hal>::HashSuite as HashSuite<BabyBear>>::HashFn: ControlId,
+//         E: EvalCheck<H>,
+//     {
+//         let mut segments = Vec::new();
+//         for segment in self.segments.iter() {
+//             segments.push(segment.prove(hal, eval)?);
+//         }
+//         let receipt = SessionReceipt {
+//             segments,
+//             journal: self.journal.clone(),
+//         };
+//         let image_id = self.segments[0].pre_image.get_root();
+//         let hal = CpuVerifyHal::<_, H::HashSuite, _>::new(&crate::CIRCUIT);
+//         receipt
+//             .verify_with_hal(&hal, image_id)
+//             .map_err(|err| anyhow!("Verification error: {err}"))?;
+//         Ok(receipt)
+//     }
+// }
 
 impl Segment {
     /// Call the ZKP system to produce a [SegmentReceipt].
@@ -196,7 +199,10 @@ impl Segment {
     {
         let io = self.prepare_globals();
         let machine = MachineContext::new(&self);
-        let mut executor = Executor::new(&CIRCUIT, machine, self.po2, self.po2, &io);
+        let mut executor = Executor::new(
+            &CIRCUIT, machine, // self.po2, self.po2,
+            &io,
+        );
 
         let loader = Loader::new();
         loader.load(|chunk, fini| executor.step(chunk, fini))?;

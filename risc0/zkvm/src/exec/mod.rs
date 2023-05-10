@@ -64,25 +64,25 @@ pub struct Executor<'a> {
     env: ExecutorEnv<'a>,
     pre_image: MemoryImage,
     monitor: MemoryMonitor,
-    pre_pc: u32,
-    pc: u32,
+    pre_pc: u64,
+    pc: u64,
     init_cycles: usize,
     fini_cycles: usize,
     body_cycles: usize,
     segment_cycle: usize,
-    segments: Vec<Segment>,
+    // segments: Vec<Segment>,
     insn_counter: u32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SyscallRecord {
-    pub to_guest: Vec<u32>,
-    pub regs: (u32, u32),
+    pub to_guest: Vec<u64>,
+    pub regs: (u64, u64),
 }
 
 #[derive(Clone)]
 pub struct OpCodeResult {
-    pc: u32,
+    pc: u64,
     exit_code: Option<ExitCode>,
     extra_cycles: usize,
     syscall: Option<SyscallRecord>,
@@ -90,7 +90,7 @@ pub struct OpCodeResult {
 
 impl OpCodeResult {
     fn new(
-        pc: u32,
+        pc: u64,
         exit_code: Option<ExitCode>,
         extra_cycles: usize,
         syscall: Option<SyscallRecord>,
@@ -122,7 +122,7 @@ impl Write for Journal {
 
 impl<'a> Executor<'a> {
     /// Construct a new [Executor] from a [MemoryImage] and entry point.
-    pub fn new(env: ExecutorEnv<'a>, image: MemoryImage, pc: u32) -> Self {
+    pub fn new(env: ExecutorEnv<'a>, image: MemoryImage, pc: u64) -> Self {
         let pre_image = image.clone();
         let monitor = MemoryMonitor::new(image);
         let loader = Loader::new();
@@ -139,15 +139,15 @@ impl<'a> Executor<'a> {
             fini_cycles,
             body_cycles: 0,
             segment_cycle: init_cycles,
-            segments: Vec::new(),
+            // segments: Vec::new(),
             insn_counter: 0,
         }
     }
 
     /// Construct a new [Executor] from an ELF binary.
     pub fn from_elf(env: ExecutorEnv<'a>, elf: &[u8]) -> Result<Self> {
-        let program = Program::load_elf(&elf, MEM_SIZE as u32)?;
-        let image = MemoryImage::new(&program, PAGE_SIZE as u32);
+        let program = Program::load_elf(&elf, MEM_SIZE as u64)?;
+        let image = MemoryImage::new(&program, PAGE_SIZE as u64);
         Ok(Self::new(env, image, program.entry))
     }
 
@@ -156,32 +156,32 @@ impl<'a> Executor<'a> {
     pub fn run(&mut self) -> Result<Session> {
         self.monitor.clear_session();
 
-        let journal = Journal::default();
-        self.env
-            .io
-            .borrow_mut()
-            .with_write_fd(fileno::JOURNAL, journal.clone());
+        //        let journal = Journal::default();
+        // self.env
+        //     .io
+        //     .borrow_mut()
+        //     .with_write_fd(fileno::JOURNAL, journal.clone());
 
         let mut run_loop = || -> Result<ExitCode> {
             loop {
                 if let Some(exit_code) = self.step()? {
-                    let total_cycles = self.total_cycles();
-                    log::debug!("exit_code: {exit_code:?}, total_cycles: {total_cycles}");
-                    assert!(total_cycles <= (1 << self.env.segment_limit_po2));
+                    // let total_cycles = self.total_cycles();
+                    // log::debug!("exit_code: {exit_code:?}, total_cycles: {total_cycles}");
+                    // assert!(total_cycles <= (1 << self.env.segment_limit_po2));
                     let pre_image = self.pre_image.clone();
                     self.monitor.image.hash_pages(); // TODO: hash only the dirty pages
                     let post_image_id = self.monitor.image.get_root();
                     let syscalls = take(&mut self.monitor.syscalls);
-                    let faults = take(&mut self.monitor.faults);
-                    self.segments.push(Segment::new(
-                        pre_image,
-                        post_image_id,
-                        self.pre_pc,
-                        faults,
-                        syscalls,
-                        exit_code,
-                        log2_ceil(total_cycles.next_power_of_two()),
-                    ));
+                    // let faults = take(&mut self.monitor.faults);
+                    // self.segments.push(Segment::new(
+                    //     pre_image,
+                    //     post_image_id,
+                    //     self.pre_pc,
+                    //     // faults,
+                    //     syscalls,
+                    //     exit_code,
+                    //     // log2_ceil(total_cycles.next_power_of_two()),
+                    // ));
                     match exit_code {
                         ExitCode::SystemSplit(_) => self.split(),
                         ExitCode::SessionLimit => bail!("Session limit exceeded"),
@@ -201,8 +201,8 @@ impl<'a> Executor<'a> {
 
         let exit_code = run_loop()?;
         let mut segments = Vec::new();
-        std::mem::swap(&mut segments, &mut self.segments);
-        Ok(Session::new(segments, journal.buf.take(), exit_code))
+        // std::mem::swap(&mut segments, &mut self.segments);
+        Ok(Session::new(segments, exit_code))
     }
 
     fn split(&mut self) {
@@ -218,9 +218,9 @@ impl<'a> Executor<'a> {
     ///
     /// This can be directly used by debuggers.
     pub fn step(&mut self) -> Result<Option<ExitCode>> {
-        if self.session_cycle() > self.env.get_session_limit() {
-            return Ok(Some(ExitCode::SessionLimit));
-        }
+        // if self.session_cycle() > self.env.get_session_limit() {
+        //     return Ok(Some(ExitCode::SessionLimit));
+        // }
 
         let insn = self.monitor.load_u32(self.pc);
         let opcode = OpCode::decode(insn, self.pc)?;
@@ -262,18 +262,18 @@ impl<'a> Executor<'a> {
         // otherwise, commit memory and hart
 
         let segment_limit = self.env.get_segment_limit();
-        let total_pending_cycles = self.total_pending_cycles(&opcode);
+        // let total_pending_cycles = self.total_pending_cycles(&opcode);
         // log::debug!(
         //     "cycle: {}, segment: {}, total: {}",
         //     self.segment_cycle,
         //     total_pending_cycles,
         //     self.total_cycles()
         // );
-        let exit_code = if total_pending_cycles > segment_limit {
-            Some(ExitCode::SystemSplit(self.insn_counter))
-        } else {
-            self.advance(opcode, op_result)
-        };
+        // let exit_code = if total_pending_cycles > segment_limit {
+        //     Some(ExitCode::SystemSplit(self.insn_counter))
+        // } else {
+        let exit_code = self.advance(opcode, op_result);
+        // };
         Ok(exit_code)
     }
 
@@ -289,47 +289,49 @@ impl<'a> Executor<'a> {
         self.pc = op_result.pc;
         self.insn_counter += 1;
         self.body_cycles += opcode.cycles + op_result.extra_cycles;
-        let total_page_read_cycles = self.monitor.total_page_read_cycles();
+        // let total_page_read_cycles = self.monitor.total_page_read_cycles();
         // log::debug!("total_page_read_cycles: {total_page_read_cycles}");
-        self.segment_cycle = self.init_cycles + total_page_read_cycles + self.body_cycles;
-        self.monitor.commit(self.session_cycle());
+        // self.segment_cycle = self.init_cycles + total_page_read_cycles +
+        // self.body_cycles;
+        // self.monitor.commit(self.session_cycle());
+        self.monitor.commit();
         op_result.exit_code
     }
 
-    fn total_cycles(&self) -> usize {
-        self.init_cycles
-            + self.monitor.total_fault_cycles()
-            + self.body_cycles
-            + self.fini_cycles
-            + SHA_CYCLES
-            + ZK_CYCLES
-    }
+    // fn total_cycles(&self) -> usize {
+    //     self.init_cycles
+    //         + self.monitor.total_fault_cycles()
+    //         + self.body_cycles
+    //         + self.fini_cycles
+    //         + SHA_CYCLES
+    //         + ZK_CYCLES
+    // }
 
-    fn total_pending_cycles(&self, opcode: &OpCode) -> usize {
-        // How many cycles are required for the entire segment?
-        // This sum is based on:
-        // - ensure we don't split in the middle of a SHA compress
-        // - each page fault requires 1 PageFault cycle + CYCLES_PER_PAGE cycles
-        // - leave room for fini_cycles
-        // - leave room for ZK cycles
-        self.init_cycles
-            + self.monitor.total_pending_fault_cycles()
-            + opcode.cycles
-            + self.body_cycles
-            + self.fini_cycles
-            + SHA_CYCLES
-            + ZK_CYCLES
-    }
+    // fn total_pending_cycles(&self, opcode: &OpCode) -> usize {
+    //     // How many cycles are required for the entire segment?
+    //     // This sum is based on:
+    //     // - ensure we don't split in the middle of a SHA compress
+    //     // - each page fault requires 1 PageFault cycle + CYCLES_PER_PAGE cycles
+    //     // - leave room for fini_cycles
+    //     // - leave room for ZK cycles
+    //     self.init_cycles
+    //         + self.monitor.total_pending_fault_cycles()
+    //         + opcode.cycles
+    //         + self.body_cycles
+    //         + self.fini_cycles
+    //         + SHA_CYCLES
+    //         + ZK_CYCLES
+    // }
 
-    fn session_cycle(&self) -> usize {
-        self.segments.len() * self.env.get_segment_limit() + self.segment_cycle
-    }
+    // fn session_cycle(&self) -> usize {
+    //     self.segments.len() * self.env.get_segment_limit() + self.segment_cycle
+    // }
 
     fn ecall(&mut self) -> Result<OpCodeResult> {
         match self.monitor.load_register(REG_T0) {
             ecall::HALT => self.ecall_halt(),
             ecall::OUTPUT => self.ecall_output(),
-            ecall::SOFTWARE => self.ecall_software(),
+            // ecall::SOFTWARE => self.ecall_software(),
             ecall::SHA => self.ecall_sha(),
             ecall => bail!("Unknown ecall {ecall:?}"),
         }
@@ -345,7 +347,7 @@ impl<'a> Executor<'a> {
                 None,
             )),
             halt::PAUSE => Ok(OpCodeResult::new(
-                self.pc + WORD_SIZE as u32,
+                self.pc + WORD_SIZE as u64,
                 Some(ExitCode::Paused),
                 0,
                 None,
@@ -356,7 +358,7 @@ impl<'a> Executor<'a> {
 
     fn ecall_output(&mut self) -> Result<OpCodeResult> {
         log::debug!("ecall(output)");
-        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u32, None, 0, None))
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
 
     fn ecall_sha(&mut self) -> Result<OpCodeResult> {
@@ -374,11 +376,11 @@ impl<'a> Executor<'a> {
         for _ in 0..count {
             let mut block = [0u32; BLOCK_WORDS];
             for i in 0..DIGEST_WORDS {
-                block[i] = self.monitor.load_u32(block1_ptr + (i * WORD_SIZE) as u32);
+                block[i] = self.monitor.load_u32(block1_ptr + (i * WORD_SIZE) as u64);
             }
             for i in 0..DIGEST_WORDS {
                 block[DIGEST_WORDS + i] =
-                    self.monitor.load_u32(block2_ptr + (i * WORD_SIZE) as u32);
+                    self.monitor.load_u32(block2_ptr + (i * WORD_SIZE) as u64);
             }
             log::debug!("Compressing block {block:02x?}");
             sha2::compress256(
@@ -388,8 +390,8 @@ impl<'a> Executor<'a> {
                 )],
             );
 
-            block1_ptr += BLOCK_BYTES as u32;
-            block2_ptr += BLOCK_BYTES as u32;
+            block1_ptr += BLOCK_BYTES as u64;
+            block2_ptr += BLOCK_BYTES as u64;
         }
         log::debug!("Final sha state: {state:08x?}");
 
@@ -401,50 +403,52 @@ impl<'a> Executor<'a> {
             .store_region(out_state_ptr, bytemuck::cast_slice(&state));
 
         Ok(OpCodeResult::new(
-            self.pc + WORD_SIZE as u32,
+            self.pc + WORD_SIZE as u64,
             None,
             SHA_CYCLES * count as usize,
             None,
         ))
     }
 
-    fn ecall_software(&mut self) -> Result<OpCodeResult> {
-        let [to_guest_ptr, to_guest_words, name_ptr] =
-            self.monitor.load_registers([REG_A0, REG_A1, REG_A2]);
-        let syscall_name = self.monitor.load_string(name_ptr)?;
-        log::debug!("Guest called syscall {syscall_name:?} requesting {to_guest_words} words back");
+    // fn ecall_software(&mut self) -> Result<OpCodeResult> {
+    //     let [to_guest_ptr, to_guest_words, name_ptr] =
+    //         self.monitor.load_registers([REG_A0, REG_A1, REG_A2]);
+    //     let syscall_name = self.monitor.load_string(name_ptr)?;
+    //     log::debug!("Guest called syscall {syscall_name:?} requesting
+    // {to_guest_words} words back");
 
-        let chunks = align_up(to_guest_words as usize, WORD_SIZE);
-        let mut to_guest = vec![0; to_guest_words as usize];
+    //     let chunks = align_up(to_guest_words as usize, WORD_SIZE);
+    //     let mut to_guest = vec![0; to_guest_words as usize];
 
-        let handler = self
-            .env
-            .get_syscall(&syscall_name)
-            .ok_or(anyhow!("Unknown syscall: {syscall_name:?}"))?;
-        let (a0, a1) =
-            handler
-                .borrow_mut()
-                .syscall(&syscall_name, &mut self.monitor, &mut to_guest)?;
+    //     // let handler = self
+    //     //     .env
+    //     //     .get_syscall(&syscall_name)
+    //     //     .ok_or(anyhow!("Unknown syscall: {syscall_name:?}"))?;
+    //     // let (a0, a1) =
+    //     //     handler
+    //     //         .borrow_mut()
+    //     //         .syscall(&syscall_name, &mut self.monitor, &mut to_guest)?;
 
-        self.monitor
-            .store_region(to_guest_ptr, bytemuck::cast_slice(&to_guest));
-        self.monitor.store_register(REG_A0, a0);
-        self.monitor.store_register(REG_A1, a1);
+    //     // self.monitor
+    //     //     .store_region(to_guest_ptr, bytemuck::cast_slice(&to_guest));
+    //     // self.monitor.store_register(REG_A0, a0);
+    //     // self.monitor.store_register(REG_A1, a1);
 
-        log::debug!("Syscall returned a0: {a0:#X}, a1: {a1:#X}, chunks: {chunks}");
+    //     // log::debug!("Syscall returned a0: {a0:#X}, a1: {a1:#X}, chunks:
+    // {chunks}");
 
-        // One cycle for the ecall cycle, then one for each chunk or
-        // portion thereof then one to save output (a0, a1)
-        Ok(OpCodeResult::new(
-            self.pc + WORD_SIZE as u32,
-            None,
-            1 + chunks + 1,
-            Some(SyscallRecord {
-                to_guest,
-                regs: (a0, a1),
-            }),
-        ))
-    }
+    //     // One cycle for the ecall cycle, then one for each chunk or
+    //     // portion thereof then one to save output (a0, a1)
+    //     Ok(OpCodeResult::new(
+    //         self.pc + WORD_SIZE as u64,
+    //         None,
+    //         1 + chunks + 1,
+    //         Some(SyscallRecord {
+    //             to_guest,
+    //             regs: (a0, a1),
+    //         }),
+    //     ))
+    // }
 }
 
 /// An event traced from the running VM.

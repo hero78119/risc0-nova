@@ -66,8 +66,8 @@ where
     /// Perform initial 'execution' setting code + data.
     /// Additionally, write any 'results' as needed.
     pub fn execute<R: Rng<F>>(&mut self, iop: &mut WriteIOP<F, R>) {
-        iop.write_field_elem_slice(&*self.exec.io.as_slice());
-        iop.write_u32_slice(&[self.exec.po2 as u32]);
+        // iop.write_field_elem_slice(&*self.exec.io.as_slice());
+        // iop.write_u32_slice(&[self.exec.po2 as u32]);
     }
 
     fn compute_accum(&mut self) {
@@ -150,7 +150,8 @@ where
     }
 
     pub fn po2(&self) -> u32 {
-        self.exec.po2 as u32
+        // self.exec.po2 as u32
+        0u32
     }
 
     pub fn get_code(&self) -> &CpuBuffer<F::Elem> {
