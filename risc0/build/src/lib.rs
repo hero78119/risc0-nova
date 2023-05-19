@@ -70,8 +70,8 @@ impl Risc0Method {
         }
 
         let elf = fs::read(&self.elf_path).unwrap();
-        let program = Program::load_elf(&elf, MEM_SIZE as u32).unwrap();
-        let image = MemoryImage::new(&program, PAGE_SIZE as u32);
+        let program = Program::load_elf(&elf, MEM_SIZE as u64).unwrap();
+        let image = MemoryImage::new(&program, PAGE_SIZE as u64);
         image.get_root()
     }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fs, path::PathBuf};
+use std::{array, fs, path::PathBuf};
 
 use clap::Parser;
 use risc0_zkvm::{prove::default_hal, Executor, ExecutorEnv, SessionReceipt};
@@ -75,7 +75,16 @@ fn main() {
 
     let env = builder.build();
     let mut exec = Executor::from_elf(env, &elf_contents).unwrap();
-    let session = exec.run().unwrap();
+    let session = match exec.run() {
+        Ok(session) => session,
+        Err(err) => {
+            let regs: [u64; 32] = exec.monitor.load_registers(array::from_fn(|idx| idx));
+            regs.iter().enumerate().for_each(|(idx, value)| {
+                println!("value loaded {:08x}, idx: {:?}", value, idx,);
+            });
+            panic!("error {:?}", err)
+        }
+    };
 
     let (hal, eval) = default_hal();
     // let receipt = session.prove(hal.as_ref(), &eval).unwrap();

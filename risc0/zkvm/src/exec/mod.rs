@@ -63,7 +63,8 @@ const SHA_CYCLES: usize = 72;
 pub struct Executor<'a> {
     env: ExecutorEnv<'a>,
     pre_image: MemoryImage,
-    monitor: MemoryMonitor,
+    /// MemoryMonitor
+    pub monitor: MemoryMonitor,
     pre_pc: u64,
     pc: u64,
     init_cycles: usize,
@@ -333,7 +334,7 @@ impl<'a> Executor<'a> {
             ecall::OUTPUT => self.ecall_output(),
             // ecall::SOFTWARE => self.ecall_software(),
             ecall::SHA => self.ecall_sha(),
-            ecall => bail!("Unknown ecall {ecall:?}"),
+            ecall => bail!("Unknown ecall {ecall:08x}"),
         }
     }
 

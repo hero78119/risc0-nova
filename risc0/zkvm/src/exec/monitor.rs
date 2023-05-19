@@ -47,6 +47,7 @@ pub struct MemoryMonitor {
     cycle: usize,
     op_result: Option<OpCodeResult>,
     pub syscalls: Vec<SyscallRecord>,
+    initial: bool,
 }
 
 impl MemoryMonitor {
@@ -59,6 +60,7 @@ impl MemoryMonitor {
             cycle: 0,
             op_result: None,
             syscalls: Vec::new(),
+            initial: false,
         }
     }
 
@@ -91,12 +93,16 @@ impl MemoryMonitor {
     }
 
     pub fn load_register(&mut self, idx: usize) -> u64 {
-        println!(
-            "register value: {:08x}, value loaded {:08x}",
-            get_register_addr(idx),
+        if idx == 2 && self.initial == false {
+            // sp address
+            // set stack address at the end
+            self.initial = true;
+            self.store_u64(get_register_addr(idx), 0b10000000);
             self.load_u64(get_register_addr(idx))
-        );
-        self.load_u64(get_register_addr(idx))
+        } else {
+            let register_addr = get_register_addr(idx);
+            self.load_u64(register_addr)
+        }
     }
 
     pub fn load_registers<const N: usize>(&mut self, idxs: [usize; N]) -> [u64; N] {
@@ -135,7 +141,6 @@ impl MemoryMonitor {
 
     pub fn store_u64(&mut self, addr: u64, data: u64) {
         assert_eq!(addr % DOUBLE_WORD_SIZE as u64, 0, "unaligned store");
-        println!("before store: addr {:08x}, data: {:08x}", addr, data);
         self.store_region(addr, &data.to_le_bytes());
     }
 
