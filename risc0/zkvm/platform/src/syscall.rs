@@ -23,6 +23,12 @@ pub mod ecall {
     pub const OUTPUT: u64 = 1;
     pub const SOFTWARE: u64 = 2;
     pub const SHA: u64 = 3;
+
+    pub const OPEN: u64 = 56;
+    pub const WRITE: u64 = 64;
+
+    pub const GETAFFINITY: u64 = 123;
+    pub const MMAP: u64 = 222;
 }
 
 pub mod halt {

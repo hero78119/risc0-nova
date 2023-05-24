@@ -36,10 +36,10 @@ use risc0_zkp::{
 };
 use risc0_zkvm_platform::{
     fileno,
-    memory::MEM_SIZE,
+    memory::{HEAP_INITIAL_ADDRESS, MEM_SIZE},
     syscall::{
         ecall, halt,
-        reg_abi::{REG_A0, REG_A1, REG_A2, REG_A3, REG_A4, REG_T0},
+        reg_abi::{REG_A0, REG_A1, REG_A2, REG_A3, REG_A4, REG_A7},
     },
     PAGE_SIZE, WORD_SIZE,
 };
@@ -71,6 +71,7 @@ pub struct Executor<'a> {
     fini_cycles: usize,
     body_cycles: usize,
     segment_cycle: usize,
+    heap_addr: u64,
     // segments: Vec<Segment>,
     insn_counter: u32,
 }
@@ -140,6 +141,7 @@ impl<'a> Executor<'a> {
             fini_cycles,
             body_cycles: 0,
             segment_cycle: init_cycles,
+            heap_addr: HEAP_INITIAL_ADDRESS as u64,
             // segments: Vec::new(),
             insn_counter: 0,
         }
@@ -234,6 +236,13 @@ impl<'a> Executor<'a> {
             self.ecall()?
         } else {
             let registers = self.monitor.load_registers(array::from_fn(|idx| idx));
+            println!("sp 2 values: {:16x} at pc {:08x}", registers[2], self.pc);
+            // if self.pc >= 0x0003852c && self.pc <= 0x00038548 {
+            if self.pc == 0x638c4 {
+                registers.iter().enumerate().for_each(|(idx, value)| {
+                    println!("value loaded {:08x}, idx: {:?}", value, idx,);
+                });
+            }
             let mut hart = HartState {
                 registers,
                 pc: self.pc,
@@ -329,13 +338,52 @@ impl<'a> Executor<'a> {
     // }
 
     fn ecall(&mut self) -> Result<OpCodeResult> {
-        match self.monitor.load_register(REG_T0) {
+        // previously it used REG_TO. Seems it's for RIV32E (embedded version spec). A reference https://github.com/chipsalliance/VeeR-ISS/blob/main/Syscall.cpp#L788-L791
+        // here in RIV64 we switch to REG_A7
+        match self.monitor.load_register(REG_A7) {
             ecall::HALT => self.ecall_halt(),
             ecall::OUTPUT => self.ecall_output(),
             // ecall::SOFTWARE => self.ecall_software(),
+            ecall::OPEN => self.ecall_open(),
+            ecall::WRITE => self.ecall_write(),
             ecall::SHA => self.ecall_sha(),
-            ecall => bail!("Unknown ecall {ecall:08x}"),
+            ecall::MMAP => self.ecall_mmap(),
+            ecall::GETAFFINITY => self.ecall_get_affinity(),
+            ecall => bail!("Unknown ecall {ecall:08x} in decimal {ecall:?}"),
         }
+    }
+
+    fn ecall_get_affinity(&mut self) -> Result<OpCodeResult> {
+        self.monitor.store_register(REG_A0, 0u64);
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
+    }
+
+    fn ecall_mmap(&mut self) -> Result<OpCodeResult> {
+        let page_size_align = 1u64 << 12u64;
+        let page_size_mask = page_size_align - 1;
+        let mut desired_page_size = self.monitor.load_register(REG_A1);
+        println!(
+            "desired_page_size {:08x}, in dec {:?}, page_size_mask {:08x}",
+            desired_page_size, desired_page_size, page_size_mask
+        );
+        if desired_page_size & page_size_mask != 0 {
+            // adjust size to align with page size
+            desired_page_size += page_size_align - (desired_page_size & page_size_mask)
+        }
+        self.monitor.store_register(REG_A0, self.heap_addr);
+        self.heap_addr += desired_page_size;
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
+    }
+
+    fn ecall_open(&mut self) -> Result<OpCodeResult> {
+        self.monitor.store_register(REG_A0, (-100i64) as u64);
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
+    }
+
+    fn ecall_write(&mut self) -> Result<OpCodeResult> {
+        let value = self.monitor.load_register(REG_A3); // write A3 length to A0 return value as write convention
+        self.monitor.store_register(REG_A0, value);
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
 
     fn ecall_halt(&mut self) -> Result<OpCodeResult> {

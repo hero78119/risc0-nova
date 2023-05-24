@@ -77,6 +77,49 @@ impl Program {
                 }
             }
         }
+        // patch below symbols to `ret` assembly
+        // refer https://github.com/ethereum-optimism/cannon/blob/32c76db43dc4b5fb25f49ba8fbdb84fed8e5615a/mipsevm/patch.go#L66
+        let (symtab, strtab) = elf
+            .symbol_table()
+            .expect("Failed to read symbol table")
+            .expect("Failed to find strtab table");
+        symtab.iter().for_each(|entry| {
+            let symbol_name = strtab.get(entry.st_name as usize).unwrap();
+            match symbol_name {
+                "runtime.gcenable"
+                | "runtime.init.5"  // patch out: init() { go forcegchelper() }
+                | "runtime.main.func1" // patch out: main.func() { newm(sysmon, ....) }
+                | "runtime.deductSweepCredit" // uses floating point nums and interacts with gc we disabled
+                | "runtime.(*gcControllerState).commit"
+                // these prometheus packages rely on concurrent background things. We cannot run those.
+                | "github.com/prometheus/client_golang/prometheus.init"
+                | "github.com/prometheus/client_golang/prometheus.init.0"
+                | "github.com/prometheus/procfs.init"
+                | "github.com/prometheus/common/model.init"
+                | "github.com/prometheus/client_model/go.init"
+                | "github.com/prometheus/client_model/go.init.0"
+                | "github.com/prometheus/client_model/go.init.1"
+                // skip flag pkg init, we need to debug arg-processing more to see why this fails
+                | "flag.init"
+                // We need to patch this out, we don't pass float64nan because we don't support floats
+                | "runtime.check"
+                | "runtime.args"
+                // | "runtime.osinit"
+                // | "runtime.schedinit"
+                => {
+                    println!(
+                        "symbol_name: {:?}, st_value {:08x}, image.get(key): {:08x}",
+                        symbol_name,
+                        entry.st_value,
+                        image.get(&entry.st_value).unwrap(),
+                    );
+                    image.insert(entry.st_value, 0x00008067); // ret, immediate return
+                    ()
+                }
+                _ => (),
+            }
+        });
+        // common.symtab.iter().map(|f| f)
         Ok(Program { entry, image })
     }
 }

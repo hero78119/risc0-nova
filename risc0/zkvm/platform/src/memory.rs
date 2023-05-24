@@ -13,9 +13,15 @@
 // limitations under the License.
 
 use super::WORD_SIZE;
+use crate::DOUBLE_WORD_SIZE;
 
 pub const MEM_BITS: usize = 28;
 pub const MEM_SIZE: usize = 1 << MEM_BITS;
+
+// sp start from MEM_SIZE - 4096 * DOUBLE_WORD_SIZE and grows downwards
+// conventionally
+pub const STACK_INITIAL_ADDRESS: usize = MEM_SIZE - (1 << 10) * DOUBLE_WORD_SIZE;
+pub const HEAP_INITIAL_ADDRESS: usize = MEM_SIZE - (1 << 8) * DOUBLE_WORD_SIZE;
 
 pub struct Region {
     start: usize,

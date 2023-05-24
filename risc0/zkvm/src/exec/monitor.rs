@@ -16,7 +16,10 @@ use std::{array, collections::BTreeSet};
 
 use anyhow::Result;
 use risc0_zkp::core::hash::sha::BLOCK_BYTES;
-use risc0_zkvm_platform::{memory::SYSTEM, DOUBLE_WORD_SIZE, PAGE_SIZE, WORD_SIZE};
+use risc0_zkvm_platform::{
+    memory::{MEM_SIZE, STACK_INITIAL_ADDRESS, SYSTEM},
+    DOUBLE_WORD_SIZE, PAGE_SIZE, WORD_SIZE,
+};
 use rrs_lib::{MemAccessSize, Memory};
 
 use super::{OpCodeResult, SyscallRecord};
@@ -97,8 +100,10 @@ impl MemoryMonitor {
             // sp address
             // set stack address at the end
             self.initial = true;
-            self.store_u64(get_register_addr(idx), 0b10000000);
-            self.load_u64(get_register_addr(idx))
+            // FIXME: it will take effect at next instructoin
+            self.store_u64(get_register_addr(idx), STACK_INITIAL_ADDRESS as u64);
+            // cant call load_u64 here since it haven't updated
+            STACK_INITIAL_ADDRESS as u64
         } else {
             let register_addr = get_register_addr(idx);
             self.load_u64(register_addr)
@@ -152,7 +157,12 @@ impl MemoryMonitor {
     }
 
     pub fn store_register(&mut self, idx: usize, data: u64) {
-        self.store_u64(get_register_addr(idx), data);
+        if idx == 2 && data == 0u64 {
+            println!("reset sp happened here!");
+            self.store_u64(get_register_addr(idx), STACK_INITIAL_ADDRESS as u64)
+        } else {
+            self.store_u64(get_register_addr(idx), data);
+        }
     }
 
     pub fn save_op(&mut self, op_result: OpCodeResult) {

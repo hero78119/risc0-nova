@@ -86,6 +86,8 @@ impl OpCode {
         let rs2 = (insn & 0x01f00000) >> 20;
         let funct3 = (insn & 0x00007000) >> 12;
         let funct7 = (insn & 0xfe000000) >> 25;
+        // RV64 bit 25 is used as shamt[5]
+        let funct7_rv64 = (insn & 0xfc000000) >> 26;
         // log::debug!("decode: 0x{word:08X}");
         println!("decode: 0x{insn:08x} at pc 0x{insn_pc:08x}");
         Ok(match opcode {
@@ -93,9 +95,10 @@ impl OpCode {
                 0x0 => OpCode::new(insn, insn_pc, "LB", 24, 1),
                 0x1 => OpCode::new(insn, insn_pc, "LH", 25, 1),
                 0x2 => OpCode::new(insn, insn_pc, "LW", 26, 1),
-                0x3 => OpCode::new(insn, insn_pc, "LD", 26, 1), // RV64I
-                0x4 => OpCode::new(insn, insn_pc, "LBU", 27, 1),
-                0x5 => OpCode::new(insn, insn_pc, "LHU", 28, 1),
+                0x3 => OpCode::new(insn, insn_pc, "LD", 27, 1), // RV64I
+                0x4 => OpCode::new(insn, insn_pc, "LBU", 28, 1),
+                0x5 => OpCode::new(insn, insn_pc, "LHU", 29, 1),
+                0x6 => OpCode::new(insn, insn_pc, "LWU", 30, 1),
                 _ => {
                     println!("opcode {:#8x}", insn);
                     log::debug!("opcode {:?}", opcode);
@@ -108,10 +111,13 @@ impl OpCode {
                 0x2 => OpCode::new(insn, insn_pc, "SLTI", 11, 1),
                 0x3 => OpCode::new(insn, insn_pc, "SLTIU", 12, 1),
                 0x4 => OpCode::new(insn, insn_pc, "XORI", 8, 2),
-                0x5 => match funct7 {
-                    0x00 => OpCode::new(insn, insn_pc, "SRLI", 46, 2),
-                    0x20 => OpCode::new(insn, insn_pc, "SRAI", 47, 2),
-                    _ => unreachable!(),
+                0x5 => match funct7_rv64 {
+                    0b000000 => OpCode::new(insn, insn_pc, "SRLI", 46, 2),
+                    0b010000 => OpCode::new(insn, insn_pc, "SRAI", 47, 2),
+                    _ => {
+                        println!("funct7 {:8x}", funct7);
+                        unreachable!()
+                    }
                 },
                 0x6 => OpCode::new(insn, insn_pc, "ORI", 9, 2),
                 0x7 => OpCode::new(insn, insn_pc, "ANDI", 10, 2),
@@ -158,6 +164,10 @@ impl OpCode {
             },
             0b1100111 => match funct3 {
                 0x0 => OpCode::new(insn, insn_pc, "JALR", 20, 1),
+                _ => unreachable!(),
+            },
+            0b0011011 => match funct3 {
+                0b000 => OpCode::new(insn, insn_pc, "ADDIW", 0, 1),
                 _ => unreachable!(),
             },
             0b1101111 => OpCode::new(insn, insn_pc, "JAL", 19, 1),
