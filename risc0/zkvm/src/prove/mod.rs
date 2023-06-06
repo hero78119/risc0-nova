@@ -257,14 +257,14 @@ impl Segment {
         }
 
         // initialize ImageID
-        let image_id = self.pre_image.get_root();
-        let image_id = image_id.as_words();
-        for i in 0..DIGEST_WORDS {
-            let bytes = image_id[i].to_le_bytes();
-            for j in 0..WORD_SIZE {
-                io[(i + 1) * WORD_SIZE + j] = (bytes[j] as u32).into();
-            }
-        }
+        // let image_id = self.pre_image.get_root();
+        // let image_id = image_id.as_words();
+        // for i in 0..DIGEST_WORDS {
+        //     let bytes = image_id[i].to_le_bytes();
+        //     for j in 0..WORD_SIZE {
+        //         io[(i + 1) * WORD_SIZE + j] = (bytes[j] as u32).into();
+        //     }
+        // }
 
         io
     }

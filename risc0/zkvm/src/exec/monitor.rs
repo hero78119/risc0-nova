@@ -71,7 +71,10 @@ impl MemoryMonitor {
         let info = &self.image.info;
         // log::debug!("load_u8: 0x{addr:08x}");
         // self.pending_faults.include(info, addr, IncludeDir::Read);
-        self.image.buf[addr as usize]
+        self.image
+            .memory_space
+            .read_mem(addr, MemAccessSize::Byte)
+            .unwrap() as u8
     }
 
     pub fn load_u16(&mut self, addr: u64) -> u16 {
@@ -177,10 +180,14 @@ impl MemoryMonitor {
     pub fn commit(&mut self) {
         // cycle: usize) {
         for op in self.pending_writes.iter() {
-            if op.addr as usize >= self.image.buf.len() {
+            let res =
+                self.image
+                    .memory_space
+                    .write_mem(op.addr, MemAccessSize::Byte, u64::from(op.data));
+            if res == false {
                 println!("addr out of bound, addr {:16x}", op.addr);
             }
-            self.image.buf[op.addr as usize] = op.data;
+            // self.image.buf[op.addr as usize] = op.data;
         }
         self.pending_writes.clear();
         // self.faults.append(&mut self.pending_faults);

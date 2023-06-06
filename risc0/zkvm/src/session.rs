@@ -78,7 +78,7 @@ pub struct Session {
 /// termination.
 #[derive(Serialize, Deserialize)]
 pub struct Segment {
-    pub(crate) pre_image: MemoryImage,
+    // pub(crate) pre_image: MemoryImage,
     pub(crate) post_image_id: Digest,
     pub(crate) pc: u64,
     // pub(crate) faults: PageFaults,
@@ -111,7 +111,7 @@ impl Segment {
         // po2: usize,
     ) -> Self {
         Self {
-            pre_image,
+            // pre_image,
             post_image_id,
             pc,
             // faults,

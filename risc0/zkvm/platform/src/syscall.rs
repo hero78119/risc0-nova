@@ -26,9 +26,19 @@ pub mod ecall {
 
     pub const OPEN: u64 = 56;
     pub const WRITE: u64 = 64;
+    pub const EXIT: u64 = 94;
 
+    pub const CLOCKGETTIME: u64 = 113;
+    pub const SIGNALSTACK: u64 = 132;
+    pub const SIGACTION: u64 = 134;
+    pub const SIGPROCMASK: u64 = 135;
+
+    pub const GETTID: u64 = 178;
     pub const GETAFFINITY: u64 = 123;
     pub const MMAP: u64 = 222;
+    pub const MUNMAP: u64 = 215;
+
+    pub const MINCORE: u64 = 232;
 }
 
 pub mod halt {

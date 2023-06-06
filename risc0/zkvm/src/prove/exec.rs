@@ -29,10 +29,11 @@ use risc0_zkvm_platform::{
     },
     DOUBLE_WORD_SIZE, WORD_SIZE,
 };
+use rrs_lib::{memories::MemorySpace, Memory};
 
 use super::plonk;
 use crate::{
-    binfmt::image::MemoryImage,
+    binfmt::image::{MemoryImage, PageTableInfo},
     opcode::{MajorType, OpCode},
     session::PageFaults,
     ExitCode, Segment,
@@ -74,13 +75,17 @@ impl MemoryState {
     }
 
     #[track_caller]
-    fn load_u8(&self, addr: u64) -> u8 {
+    fn load_u8(&mut self, addr: u64) -> u8 {
         // log::debug!("load_u8: 0x{addr:08X}");
-        self.ram.buf[addr as usize]
+        // self.ram.buf[addr as usize]
+        self.ram
+            .memory_space
+            .read_mem(addr, rrs_lib::MemAccessSize::Byte)
+            .unwrap() as u8
     }
 
     #[track_caller]
-    fn load_u32(&self, addr: u64) -> u32 {
+    fn load_u32(&mut self, addr: u64) -> u32 {
         // log::debug!("load_u32: 0x{addr:08X}");
         assert_eq!(addr % WORD_SIZE as u64, 0, "unaligned load");
         let mut bytes = [0u8; WORD_SIZE];
@@ -91,7 +96,7 @@ impl MemoryState {
     }
 
     #[track_caller]
-    fn load_u64(&self, addr: u64) -> u64 {
+    fn load_u64(&mut self, addr: u64) -> u64 {
         // log::debug!("load_u32: 0x{addr:08X}");
         assert_eq!(addr % DOUBLE_WORD_SIZE as u64, 0, "unaligned load");
         let mut bytes = [0u8; DOUBLE_WORD_SIZE];
@@ -101,28 +106,31 @@ impl MemoryState {
         u64::from_le_bytes(bytes)
     }
 
-    fn load_register(&self, idx: usize) -> u64 {
+    fn load_register(&mut self, idx: usize) -> u64 {
         self.load_u64(get_register_addr(idx))
     }
 
     #[track_caller]
-    fn store_u8(&mut self, addr: u32, value: u8) {
+    fn store_u8(&mut self, addr: u64, value: u8) {
         // log::debug!("store_u8: 0x{addr:08X} <= 0x{value:08X}");
-        self.ram.buf[addr as usize] = value;
+        // self.ram.buf[addr as usize] = value;
+        self.ram
+            .memory_space
+            .write_mem(addr, rrs_lib::MemAccessSize::Byte, u64::from(value));
     }
 
     #[track_caller]
-    fn store_region(&mut self, addr: u32, slice: &[u8]) {
+    fn store_region(&mut self, addr: u64, slice: &[u8]) {
         // log::trace!("store_region: 0x{addr:08X} <= {} bytes", slice.len());
         for i in 0..slice.len() {
-            self.store_u8(addr + i as u32, slice[i]);
+            self.store_u8(addr + i as u64, slice[i]);
         }
     }
 
     #[track_caller]
-    fn store_u32(&mut self, addr: u32, value: u32) {
+    fn store_u32(&mut self, addr: u64, value: u32) {
         // log::debug!("store_u32: 0x{addr:08X} <= 0x{value:08X}");
-        assert_eq!(addr % WORD_SIZE as u32, 0, "unaligned store");
+        assert_eq!(addr % WORD_SIZE as u64, 0, "unaligned store");
         self.store_region(addr, &value.to_le_bytes());
     }
 }
@@ -281,7 +289,10 @@ impl MachineContext {
         //     .map(|syscall| syscall.regs)
         //     .collect();
         MachineContext {
-            memory: MemoryState::new(segment.pre_image.clone()),
+            memory: MemoryState::new(MemoryImage {
+                info: PageTableInfo::new(0u64, 0u64),
+                memory_space: MemorySpace::new(),
+            }),
             // faults: segment.faults.clone(),
             // syscall_out_data: VecDeque::from(syscall_out_data),
             // syscall_out_regs: VecDeque::from(syscall_out_regs),

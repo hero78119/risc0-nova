@@ -21,6 +21,10 @@ use risc0_zkvm_platform::{
     syscall::DIGEST_BYTES,
     WORD_SIZE,
 };
+use rrs_lib::{
+    memories::{MemorySpace, VecMemory},
+    MemAccessSize, Memory,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{binfmt::elf::Program, sha};
@@ -104,13 +108,15 @@ impl PageTableInfo {
 /// This is an image of the full memory state of the zkVM, including the data,
 /// text, inputs, page table, and system memory. In addition to the memory image
 /// proper, this includes some metadata about the page table.
-#[derive(Clone, Serialize, Deserialize)]
 pub struct MemoryImage {
     /// The memory image as a vector of bytes
-    pub buf: Vec<u8>,
+    // pub buf: Vec<u8>,
 
     /// Metadata about the structure of the page table
     pub info: PageTableInfo,
+
+    /// memorySpace to support memory segment across different region
+    pub memory_space: MemorySpace,
 }
 
 impl MemoryImage {
@@ -120,35 +126,45 @@ impl MemoryImage {
     /// execution not yet begun), and with the page table Merkle tree
     /// constructed.
     pub fn new(program: &Program, page_size: u64) -> Self {
-        let mut buf = vec![0_u8; MEM_SIZE];
+        // let mut buf = vec![0_u8; MEM_SIZE];
+        let buf = vec![0_u64; MEM_SIZE / 8];
 
+        let mut memory_space = MemorySpace::new();
+        let _ = memory_space
+            .add_memory(0, MEM_SIZE as u64, Box::new(VecMemory::new(buf)))
+            .unwrap();
         // Load the ELF into the memory image.
+        let program_region = memory_space.get_memory_mut::<VecMemory>(0).unwrap();
         for (addr, data) in program.image.iter() {
-            let addr = *addr as usize;
-            let bytes = data.to_le_bytes();
-            for i in 0..WORD_SIZE {
-                buf[addr + i] = bytes[i];
-            }
+            program_region.write_mem(*addr, MemAccessSize::Word, u64::from(*data));
+            // u64::from_le_bytes()
+            // for i in 0..WORD_SIZE {
+            //     buf[addr + i] = bytes[i];
+            // }
         }
-
         // Compute the page table hashes except for the very last root hash.
         let info = PageTableInfo::new(PAGE_TABLE.start() as u64, page_size);
-        let mut img = Self { buf, info };
+        let mut img = Self {
+            // buf,
+            info,
+            memory_space,
+        };
         img.hash_pages();
         img
     }
 
     /// Calculate and update the image merkle tree within this image.
     pub fn hash_pages(&mut self) {
-        for i in 0..self.info.num_pages {
-            let page_addr = self.info.get_page_addr(i as u64);
-            let page =
-                &self.buf[page_addr as usize..page_addr as usize + self.info.page_size as usize];
-            let digest = hash_page(page);
-            let entry_addr = self.info.get_page_entry_addr(i as u64);
-            self.buf[entry_addr as usize..entry_addr as usize + DIGEST_BYTES]
-                .copy_from_slice(digest.as_bytes());
-        }
+        // for i in 0..self.info.num_pages {
+        //     let page_addr = self.info.get_page_addr(i as u64);
+        //     let page =
+        //         &self.buf[page_addr as usize..page_addr as usize +
+        // self.info.page_size as usize];     let digest =
+        // hash_page(page);     let entry_addr =
+        // self.info.get_page_entry_addr(i as u64);
+        //     self.buf[entry_addr as usize..entry_addr as usize + DIGEST_BYTES]
+        //         .copy_from_slice(digest.as_bytes());
+        // }
     }
 
     /// Verify the integrity of the MemoryImage.
@@ -192,8 +208,9 @@ impl MemoryImage {
     /// Compute and return the root entry of the merkle tree.
     pub fn get_root(&self) -> Digest {
         let root_page_addr = self.info.root_page_addr;
-        let root_page = &self.buf[root_page_addr as usize..self.info.root_addr as usize];
-        hash_page(root_page)
+        // let root_page = &self.buf[root_page_addr as usize..self.info.root_addr as
+        // usize];
+        hash_page(&vec![0u8; 0])
     }
 }
 
