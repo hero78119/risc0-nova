@@ -22,59 +22,26 @@ extern crate alloc;
 
 #[cfg(feature = "binfmt")]
 pub mod binfmt;
-mod control_id;
 #[cfg(feature = "prove")]
 mod exec;
 #[cfg(any(target_os = "zkvm", doc))]
 pub mod guest;
 #[cfg(feature = "prove")]
 mod opcode;
-#[cfg(feature = "prove")]
-pub mod prove;
-pub mod receipt;
 pub mod serde;
 #[cfg(feature = "prove")]
 mod session;
-pub mod sha;
 
 pub use anyhow::Result;
-use risc0_zkp::core::hash::{
-    blake2b::{Blake2b, Blake2bHashFn},
-    poseidon::PoseidonHashFn,
-    sha::{Sha256, Sha256HashFn},
-};
 pub use risc0_zkvm_platform::{declare_syscall, memory::MEM_SIZE, PAGE_SIZE};
 
 #[cfg(feature = "binfmt")]
 pub use self::binfmt::{elf::Program, image::MemoryImage};
-pub use self::receipt::{SegmentReceipt, SessionReceipt};
 #[cfg(feature = "prove")]
 pub use self::{
     exec::{Executor, ExecutorEnv, ExecutorEnvBuilder},
-    prove::loader::Loader,
     session::{ExitCode, Segment, Session},
 };
-use crate::control_id::{RawControlId, BLAKE2B_CONTROL_ID, POSEIDON_CONTROL_ID, SHA256_CONTROL_ID};
-
-const CIRCUIT: risc0_circuit_rv32im::CircuitImpl = risc0_circuit_rv32im::CircuitImpl::new();
-
-/// Associate a specific CONTROL_ID with a HashFn.
-pub trait ControlId {
-    /// The associated CONTROL_ID for a HashFn.
-    const CONTROL_ID: RawControlId;
-}
-
-impl<S: Sha256> ControlId for Sha256HashFn<S> {
-    const CONTROL_ID: RawControlId = SHA256_CONTROL_ID;
-}
-
-impl ControlId for PoseidonHashFn {
-    const CONTROL_ID: RawControlId = POSEIDON_CONTROL_ID;
-}
-
-impl<T: Blake2b> ControlId for Blake2bHashFn<T> {
-    const CONTROL_ID: RawControlId = BLAKE2B_CONTROL_ID;
-}
 
 /// Align the given address `addr` upwards to alignment `align`.
 ///

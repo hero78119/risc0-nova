@@ -20,23 +20,10 @@
 mod env;
 mod io;
 mod monitor;
-#[cfg(test)]
-mod tests;
-
-use core::cmp;
 use std::{array, cell::RefCell, fmt::Debug, io::Write, mem::take, rc::Rc, str};
 
 use anyhow::{anyhow, bail, Result};
-use risc0_zkp::{
-    core::{
-        digest::{DIGEST_BYTES, DIGEST_WORDS},
-        hash::sha::{BLOCK_BYTES, BLOCK_WORDS},
-        log2_ceil,
-    },
-    ZK_CYCLES,
-};
 use risc0_zkvm_platform::{
-    fileno,
     memory::{HEAP_INITIAL_ADDRESS, MEM_SIZE},
     syscall::{
         ecall, halt,
@@ -45,14 +32,13 @@ use risc0_zkvm_platform::{
     PAGE_SIZE, WORD_SIZE,
 };
 use rrs_lib::{instruction_executor::InstructionExecutor, memories::VecMemory, HartState, Memory};
-use serde::{Deserialize, Serialize, __private::de};
+use serde::{Deserialize, Serialize};
 
 pub use self::env::{ExecutorEnv, ExecutorEnvBuilder};
 use self::monitor::MemoryMonitor;
 use crate::{
-    align_up,
     opcode::{MajorType, OpCode},
-    ExitCode, Loader, MemoryImage, Program, Segment, Session,
+    ExitCode, MemoryImage, Program, Session,
 };
 
 /// The number of cycles required to compress a SHA-256 block.
@@ -68,10 +54,6 @@ pub struct Executor<'a> {
     pub monitor: MemoryMonitor,
     pre_pc: u64,
     pc: u64,
-    init_cycles: usize,
-    fini_cycles: usize,
-    body_cycles: usize,
-    segment_cycle: usize,
     anonymous_heap_watermark: u64,
     // segments: Vec<Segment>,
     insn_counter: u32,
@@ -128,9 +110,6 @@ impl<'a> Executor<'a> {
     pub fn new(env: ExecutorEnv<'a>, image: MemoryImage, pc: u64) -> Self {
         // let pre_image = image.clone();
         let monitor = MemoryMonitor::new(image);
-        let loader = Loader::new();
-        let init_cycles = loader.init_cycles();
-        let fini_cycles = loader.fini_cycles();
 
         Self {
             env,
@@ -138,10 +117,6 @@ impl<'a> Executor<'a> {
             monitor,
             pre_pc: pc,
             pc,
-            init_cycles,
-            fini_cycles,
-            body_cycles: 0,
-            segment_cycle: init_cycles,
             anonymous_heap_watermark: HEAP_INITIAL_ADDRESS as u64,
             // segments: Vec::new(),
             insn_counter: 0,
@@ -173,8 +148,6 @@ impl<'a> Executor<'a> {
                     // log::debug!("exit_code: {exit_code:?}, total_cycles: {total_cycles}");
                     // assert!(total_cycles <= (1 << self.env.segment_limit_po2));
                     // let pre_image = self.pre_image.clone();
-                    self.monitor.image.hash_pages(); // TODO: hash only the dirty pages
-                    let post_image_id = self.monitor.image.get_root();
                     let syscalls = take(&mut self.monitor.syscalls);
                     // let faults = take(&mut self.monitor.faults);
                     // self.segments.push(Segment::new(
@@ -187,16 +160,9 @@ impl<'a> Executor<'a> {
                     //     // log2_ceil(total_cycles.next_power_of_two()),
                     // ));
                     match exit_code {
-                        ExitCode::SystemSplit(_) => self.split(),
                         ExitCode::SessionLimit => bail!("Session limit exceeded"),
-                        ExitCode::Paused => {
-                            log::debug!("Paused: {}", self.segment_cycle);
-                            self.split();
-                            return Ok(exit_code);
-                        }
                         ExitCode::Halted(inner) => {
                             println!("success!");
-                            log::debug!("Halted({inner}): {}", self.segment_cycle);
                             return Ok(exit_code);
                         }
                     };
@@ -208,15 +174,6 @@ impl<'a> Executor<'a> {
         let mut segments = Vec::new();
         // std::mem::swap(&mut segments, &mut self.segments);
         Ok(Session::new(segments, exit_code))
-    }
-
-    fn split(&mut self) {
-        // self.pre_image = self.monitor.image.clone();
-        self.body_cycles = 0;
-        self.insn_counter = 0;
-        self.segment_cycle = self.init_cycles;
-        self.pre_pc = self.pc;
-        self.monitor.clear_segment();
     }
 
     /// Execute a single instruction.
@@ -289,8 +246,7 @@ impl<'a> Executor<'a> {
 
     fn advance(&mut self, opcode: OpCode, op_result: OpCodeResult) -> Option<ExitCode> {
         log::debug!(
-            "[{}] pc: 0x{:08x}, insn: 0x{:08x} => {:?}",
-            self.segment_cycle,
+            "pc: 0x{:08x}, insn: 0x{:08x} => {:?}",
             self.pc,
             opcode.insn,
             opcode
@@ -298,12 +254,6 @@ impl<'a> Executor<'a> {
 
         self.pc = op_result.pc;
         self.insn_counter += 1;
-        self.body_cycles += opcode.cycles + op_result.extra_cycles;
-        // let total_page_read_cycles = self.monitor.total_page_read_cycles();
-        // log::debug!("total_page_read_cycles: {total_page_read_cycles}");
-        // self.segment_cycle = self.init_cycles + total_page_read_cycles +
-        // self.body_cycles;
-        // self.monitor.commit(self.session_cycle());
         self.monitor.commit();
         op_result.exit_code
     }
@@ -349,7 +299,6 @@ impl<'a> Executor<'a> {
             ecall::OPEN => self.ecall_open(),
             ecall::CLOSE => self.ecall_do_nth(),
             ecall::WRITE => self.ecall_write(),
-            ecall::SHA => self.ecall_sha(),
             ecall::MMAP => self.ecall_mmap(),
             ecall::MUNMAP => self.ecall_munmap(),
             ecall::MINCORE => self.ecall_mincore(),
@@ -561,12 +510,6 @@ impl<'a> Executor<'a> {
                 0,
                 None,
             )),
-            halt::PAUSE => Ok(OpCodeResult::new(
-                self.pc + WORD_SIZE as u64,
-                Some(ExitCode::Paused),
-                0,
-                None,
-            )),
             _ => bail!("Illegal halt type: {halt_type}"),
         }
     }
@@ -575,95 +518,6 @@ impl<'a> Executor<'a> {
         log::debug!("ecall(output)");
         Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
-
-    fn ecall_sha(&mut self) -> Result<OpCodeResult> {
-        let [out_state_ptr, in_state_ptr, mut block1_ptr, mut block2_ptr, count] = self
-            .monitor
-            .load_registers([REG_A0, REG_A1, REG_A2, REG_A3, REG_A4]);
-
-        let in_state: [u8; DIGEST_BYTES] = self.monitor.load_array(in_state_ptr);
-        let mut state: [u32; DIGEST_WORDS] = bytemuck::cast_slice(&in_state).try_into().unwrap();
-        for word in &mut state {
-            *word = word.to_be();
-        }
-
-        log::debug!("Initial sha state: {state:08x?}");
-        for _ in 0..count {
-            let mut block = [0u32; BLOCK_WORDS];
-            for i in 0..DIGEST_WORDS {
-                block[i] = self.monitor.load_u32(block1_ptr + (i * WORD_SIZE) as u64);
-            }
-            for i in 0..DIGEST_WORDS {
-                block[DIGEST_WORDS + i] =
-                    self.monitor.load_u32(block2_ptr + (i * WORD_SIZE) as u64);
-            }
-            log::debug!("Compressing block {block:02x?}");
-            sha2::compress256(
-                &mut state,
-                &[*generic_array::GenericArray::from_slice(
-                    bytemuck::cast_slice(&block),
-                )],
-            );
-
-            block1_ptr += BLOCK_BYTES as u64;
-            block2_ptr += BLOCK_BYTES as u64;
-        }
-        log::debug!("Final sha state: {state:08x?}");
-
-        for word in &mut state {
-            *word = u32::from_be(*word);
-        }
-
-        self.monitor
-            .store_region(out_state_ptr, bytemuck::cast_slice(&state));
-
-        Ok(OpCodeResult::new(
-            self.pc + WORD_SIZE as u64,
-            None,
-            SHA_CYCLES * count as usize,
-            None,
-        ))
-    }
-
-    // fn ecall_software(&mut self) -> Result<OpCodeResult> {
-    //     let [to_guest_ptr, to_guest_words, name_ptr] =
-    //         self.monitor.load_registers([REG_A0, REG_A1, REG_A2]);
-    //     let syscall_name = self.monitor.load_string(name_ptr)?;
-    //     log::debug!("Guest called syscall {syscall_name:?} requesting
-    // {to_guest_words} words back");
-
-    //     let chunks = align_up(to_guest_words as usize, WORD_SIZE);
-    //     let mut to_guest = vec![0; to_guest_words as usize];
-
-    //     // let handler = self
-    //     //     .env
-    //     //     .get_syscall(&syscall_name)
-    //     //     .ok_or(anyhow!("Unknown syscall: {syscall_name:?}"))?;
-    //     // let (a0, a1) =
-    //     //     handler
-    //     //         .borrow_mut()
-    //     //         .syscall(&syscall_name, &mut self.monitor, &mut to_guest)?;
-
-    //     // self.monitor
-    //     //     .store_region(to_guest_ptr, bytemuck::cast_slice(&to_guest));
-    //     // self.monitor.store_register(REG_A0, a0);
-    //     // self.monitor.store_register(REG_A1, a1);
-
-    //     // log::debug!("Syscall returned a0: {a0:#X}, a1: {a1:#X}, chunks:
-    // {chunks}");
-
-    //     // One cycle for the ecall cycle, then one for each chunk or
-    //     // portion thereof then one to save output (a0, a1)
-    //     Ok(OpCodeResult::new(
-    //         self.pc + WORD_SIZE as u64,
-    //         None,
-    //         1 + chunks + 1,
-    //         Some(SyscallRecord {
-    //             to_guest,
-    //             regs: (a0, a1),
-    //         }),
-    //     ))
-    // }
 }
 
 /// An event traced from the running VM.

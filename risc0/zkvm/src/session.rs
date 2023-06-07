@@ -17,7 +17,6 @@
 
 use alloc::collections::BTreeSet;
 
-use risc0_zkp::core::digest::Digest;
 use serde::{Deserialize, Serialize};
 
 use crate::{exec::SyscallRecord, MemoryImage};
@@ -25,16 +24,8 @@ use crate::{exec::SyscallRecord, MemoryImage};
 /// Indicates how a [Segment] or [Session]'s execution has terminated
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ExitCode {
-    /// This indicates when a system-initiated split has occured due to the
-    /// segment limit being exceeded.
-    SystemSplit(u32),
-
     /// This indicates that the session limit has been reached.
     SessionLimit,
-
-    /// A user may manually pause a session so that it can be resumed at a later
-    /// time.
-    Paused,
 
     /// This indicates normal termination of a program with an interior exit
     /// code returned from the guest.
@@ -79,7 +70,7 @@ pub struct Session {
 #[derive(Serialize, Deserialize)]
 pub struct Segment {
     // pub(crate) pre_image: MemoryImage,
-    pub(crate) post_image_id: Digest,
+    // pub(crate) post_image_id: Digest,
     pub(crate) pc: u64,
     // pub(crate) faults: PageFaults,
     // pub(crate) syscalls: Vec<SyscallRecord>,
@@ -103,7 +94,7 @@ impl Segment {
     /// Create a new [Segment] from its constituent components.
     pub(crate) fn new(
         pre_image: MemoryImage,
-        post_image_id: Digest,
+        // post_image_id: Digest,
         pc: u64,
         // faults: PageFaults,
         // syscalls: Vec<SyscallRecord>,
@@ -112,7 +103,7 @@ impl Segment {
     ) -> Self {
         Self {
             // pre_image,
-            post_image_id,
+            // post_image_id,
             pc,
             // faults,
             // syscalls,

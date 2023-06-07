@@ -22,7 +22,6 @@ pub mod ecall {
     pub const HALT: u64 = 0;
     pub const OUTPUT: u64 = 1;
     pub const SOFTWARE: u64 = 2;
-    pub const SHA: u64 = 3;
 
     pub const FCNTL: u64 = 25;
     pub const OPEN: u64 = 56;

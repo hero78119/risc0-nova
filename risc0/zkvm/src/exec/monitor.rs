@@ -15,26 +15,18 @@
 use std::{array, collections::BTreeSet};
 
 use anyhow::Result;
-use risc0_zkp::core::hash::sha::BLOCK_BYTES;
 use risc0_zkvm_platform::{
-    memory::{MEM_SIZE, STACK_INITIAL_ADDRESS, SYSTEM},
-    DOUBLE_WORD_SIZE, PAGE_SIZE, WORD_SIZE,
+    memory::{STACK_INITIAL_ADDRESS, SYSTEM},
+    DOUBLE_WORD_SIZE, WORD_SIZE,
 };
 use rrs_lib::{MemAccessSize, Memory};
 
 use super::{OpCodeResult, SyscallRecord};
 use crate::MemoryImage;
 
-/// The number of blocks that fit within a single page.
-const BLOCKS_PER_PAGE: usize = PAGE_SIZE / BLOCK_BYTES;
-
 const SHA_INIT: usize = 5;
 const SHA_LOAD: usize = 16;
 const SHA_MAIN: usize = 52;
-
-const fn cycles_per_page(blocks_per_page: usize) -> usize {
-    1 + SHA_INIT + (SHA_LOAD + SHA_MAIN) * blocks_per_page
-}
 
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 struct MemStore {
@@ -47,7 +39,6 @@ pub struct MemoryMonitor {
     // pub faults: PageFaults,
     // pending_faults: PageFaults,
     pending_writes: BTreeSet<MemStore>,
-    cycle: usize,
     op_result: Option<OpCodeResult>,
     pub syscalls: Vec<SyscallRecord>,
     initial: bool,
@@ -60,7 +51,6 @@ impl MemoryMonitor {
             // faults: PageFaults::default(),
             // pending_faults: PageFaults::default(),
             pending_writes: BTreeSet::new(),
-            cycle: 0,
             op_result: None,
             syscalls: Vec::new(),
             initial: false,
@@ -68,9 +58,6 @@ impl MemoryMonitor {
     }
 
     pub fn load_u8(&mut self, addr: u64) -> u8 {
-        let info = &self.image.info;
-        // log::debug!("load_u8: 0x{addr:08x}");
-        // self.pending_faults.include(info, addr, IncludeDir::Read);
         self.image
             .memory_space
             .read_mem(addr, MemAccessSize::Byte)
@@ -131,9 +118,6 @@ impl MemoryMonitor {
     }
 
     pub fn store_u8(&mut self, addr: u64, data: u8) {
-        let info = &self.image.info;
-        // self.pending_faults.include(info, addr, IncludeDir::Read);
-        // self.pending_faults.include(info, addr, IncludeDir::Write);
         self.pending_writes.insert(MemStore { addr, data });
     }
 

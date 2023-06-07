@@ -15,7 +15,7 @@
 use std::{array, fs, path::PathBuf};
 
 use clap::Parser;
-use risc0_zkvm::{prove::default_hal, Executor, ExecutorEnv, SessionReceipt};
+use risc0_zkvm::{Executor, ExecutorEnv};
 
 /// Runs a RISC-V ELF binary within the RISC Zero ZKVM.
 #[derive(Parser)]
@@ -40,10 +40,6 @@ struct Args {
     /// Add environment vairables in the form of NAME=value.
     #[clap(long, action = clap::ArgAction::Append)]
     env: Vec<String>,
-}
-
-fn encode_receipt(receipt: &SessionReceipt) -> Vec<u8> {
-    bytemuck::cast_slice(risc0_zkvm::serde::to_vec(&receipt).unwrap().as_slice()).into()
 }
 
 fn main() {
@@ -86,7 +82,6 @@ fn main() {
         }
     };
 
-    let (hal, eval) = default_hal();
     // let receipt = session.prove(hal.as_ref(), &eval).unwrap();
 
     // let receipt_data = encode_receipt(&receipt);
