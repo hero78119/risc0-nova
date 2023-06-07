@@ -24,7 +24,9 @@ pub mod ecall {
     pub const SOFTWARE: u64 = 2;
     pub const SHA: u64 = 3;
 
+    pub const FCNTL: u64 = 25;
     pub const OPEN: u64 = 56;
+    pub const CLOSE: u64 = 57;
     pub const WRITE: u64 = 64;
     pub const EXIT: u64 = 94;
 

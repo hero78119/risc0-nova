@@ -24,7 +24,7 @@ mod monitor;
 mod tests;
 
 use core::cmp;
-use std::{array, cell::RefCell, fmt::Debug, io::Write, mem::take, rc::Rc};
+use std::{array, cell::RefCell, fmt::Debug, io::Write, mem::take, rc::Rc, str};
 
 use anyhow::{anyhow, bail, Result};
 use risc0_zkp::{
@@ -44,7 +44,7 @@ use risc0_zkvm_platform::{
     },
     PAGE_SIZE, WORD_SIZE,
 };
-use rrs_lib::{instruction_executor::InstructionExecutor, memories::VecMemory, HartState};
+use rrs_lib::{instruction_executor::InstructionExecutor, memories::VecMemory, HartState, Memory};
 use serde::{Deserialize, Serialize, __private::de};
 
 pub use self::env::{ExecutorEnv, ExecutorEnvBuilder};
@@ -238,13 +238,11 @@ impl<'a> Executor<'a> {
             self.ecall()?
         } else {
             let registers = self.monitor.load_registers(array::from_fn(|idx| idx));
-            println!("sp 2 values: {:16x} at pc {:08x}", registers[2], self.pc);
-            if self.pc >= 0x00018b10 && self.pc <= 0x00018b48 {
-                // if self.pc == 0x638c4 {
-                registers.iter().enumerate().for_each(|(idx, value)| {
-                    println!("value loaded {:08x}, idx: {:?}", value, idx,);
-                });
-            }
+            // if self.pc >= 0x00011ad4 && self.pc <= 0x00011ad4 {
+            //     registers.iter().enumerate().for_each(|(idx, value)| {
+            //         println!("value loaded {:08x}, idx: {:?}", value, idx,);
+            //     });
+            // }
             let mut hart = HartState {
                 registers,
                 pc: self.pc,
@@ -347,7 +345,9 @@ impl<'a> Executor<'a> {
             ecall::EXIT => self.ecall_halt(),
             ecall::OUTPUT => self.ecall_output(),
             // ecall::SOFTWARE => self.ecall_software(),
+            ecall::FCNTL => self.ecall_fcntl(),
             ecall::OPEN => self.ecall_open(),
+            ecall::CLOSE => self.ecall_do_nth(),
             ecall::WRITE => self.ecall_write(),
             ecall::SHA => self.ecall_sha(),
             ecall::MMAP => self.ecall_mmap(),
@@ -469,13 +469,85 @@ impl<'a> Executor<'a> {
         Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
 
+    fn ecall_fcntl(&mut self) -> core::result::Result<OpCodeResult, anyhow::Error> {
+        let a0 = self.monitor.load_register(REG_A0); // write A3 length to A0 return value as write convention
+        let a1 = self.monitor.load_register(REG_A1); // write A3 length to A0 return value as write convention
+        let a2 = self.monitor.load_register(REG_A2); // write A3 length to A0 return value as write convention
+        let O_RDONLY = 0;
+        let O_WRONLY = 1;
+        println!("ecall_fcntl a0 {:16x}, a1 {:16x}, a2 {:16x}", a0, a1, a2);
+        let ret_status = match (a0, a1) {
+            (1000, 3) => -1, /* return error to stick to blocking-mode, https://github.com/golang/go/blob/688d75b14fd7646d66c18825f22f0a67e9fafd9e/src/internal/syscall/unix/nonblocking_unix.go#L11 */
+            _ => 0,
+        };
+        self.monitor.store_register(REG_A0, ret_status as u64);
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
+    }
+
     fn ecall_open(&mut self) -> Result<OpCodeResult> {
-        self.monitor.store_register(REG_A0, (-100i64) as u64);
+        let a0 = self.monitor.load_register(REG_A0); // write A3 length to A0 return value as write convention
+        let a1 = self.monitor.load_register(REG_A1); // write A3 length to A0 return value as write convention
+        let a2 = self.monitor.load_register(REG_A2); // write A3 length to A0 return value as write convention
+        let a3 = self.monitor.load_register(REG_A3); // write A3 length to A0 return value as write convention
+        let a4 = self.monitor.load_register(REG_A4); // write A3 length to A0 return value as write convention
+        let a7 = self.monitor.load_register(REG_A7); // write A3 length to A0 return value as write convention
+        println!(
+            "ecall_open a0 {:16x}, a1 {:16x}, a2 {:16x}, a3 {:16x}, a4 {:16x}, a7 {:16x}",
+            a0, a1, a2, a3, a4, a7
+        );
+        let MAX_KEY_LENGTH = 20;
+        let raw: Vec<u8> = (0..MAX_KEY_LENGTH)
+            .map_while(|n| {
+                let value = self
+                    .monitor
+                    .image
+                    .memory_space
+                    .read_mem(a1 + n, rrs_lib::MemAccessSize::Byte)
+                    .unwrap() as u8;
+                if value == 0 {
+                    None
+                } else {
+                    Some(value)
+                }
+            })
+            .collect();
+        let key = str::from_utf8(&raw);
+        let result_code = match key {
+            Ok("hello") => 1000i64,
+            _ => -100i64,
+        };
+
+        self.monitor.store_register(REG_A0, result_code as u64);
         Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
 
     fn ecall_write(&mut self) -> Result<OpCodeResult> {
-        let value = self.monitor.load_register(REG_A3); // write A3 length to A0 return value as write convention
+        println!("got write!");
+        let a0 = self.monitor.load_register(REG_A0);
+        let a1 = self.monitor.load_register(REG_A1);
+        let a2 = self.monitor.load_register(REG_A2);
+        let a3 = self.monitor.load_register(REG_A3);
+
+        println!(
+            "ecall_write a0 {:16x}, a1 {:16x}, a2 {:16x}, a3 {:16x}",
+            a0, a1, a2, a3
+        );
+
+        let raw: Vec<u8> = (0..a2)
+            .map(|n| {
+                self.monitor
+                    .image
+                    .memory_space
+                    .read_mem(a1 + n, rrs_lib::MemAccessSize::Byte)
+                    .unwrap() as u8
+            })
+            .collect();
+        println!(
+            "ecall_write res {:?}",
+            u64::from_le_bytes(raw.try_into().unwrap())
+        );
+
+        let value = self.monitor.load_register(REG_A2); // write A2 length to A0 return value as write convention
         self.monitor.store_register(REG_A0, value);
         Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
