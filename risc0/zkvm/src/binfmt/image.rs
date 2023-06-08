@@ -50,19 +50,29 @@ impl MemoryImage {
     /// constructed.
     pub fn new(program: &Program, page_size: u64) -> Self {
         // let mut buf = vec![0_u8; MEM_SIZE];
-        let buf = vec![0_u64; MEM_SIZE / 8];
 
         let mut memory_space = MemorySpace::new();
         let _ = memory_space
-            .add_memory(0, MEM_SIZE as u64, Box::new(VecMemory::new(buf)))
+            .add_memory(
+                0,
+                MEM_SIZE as u64,
+                Box::new(VecMemory::new(vec![0_u64; MEM_SIZE / 8])),
+            )
             .unwrap();
         // Load the ELF into the memory image.
         let program_region = memory_space.get_memory_mut::<VecMemory>(0).unwrap();
         for (addr, data) in program.image.iter() {
             program_region.write_mem(*addr, MemAccessSize::Word, u64::from(*data));
         }
+        // add memory region `0xd000000000` as playground
+        let _ = memory_space
+            .add_memory(
+                0xd000000000,
+                MEM_SIZE as u64,
+                Box::new(VecMemory::new(vec![0_u64; MEM_SIZE / 8])),
+            )
+            .unwrap();
         // Compute the page table hashes except for the very last root hash.
-        let mut img = Self { memory_space };
-        img
+        Self { memory_space }
     }
 }

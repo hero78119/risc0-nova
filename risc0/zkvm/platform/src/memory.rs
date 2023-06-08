@@ -20,7 +20,7 @@ pub const MEM_SIZE: usize = 1 << MEM_BITS;
 
 // sp start from MEM_SIZE - 4096 * DOUBLE_WORD_SIZE and grows downwards
 // conventionally
-pub const STACK_INITIAL_ADDRESS: usize = MEM_SIZE - (1 << 13) * DOUBLE_WORD_SIZE;
+pub const STACK_INITIAL_ADDRESS: usize = MEM_SIZE - (32) * DOUBLE_WORD_SIZE;
 pub const HEAP_INITIAL_ADDRESS: usize = MEM_SIZE; // heap grows from top of 2^28
 
 pub struct Region {
