@@ -89,8 +89,6 @@ impl OpCode {
         // RV64 bit 25 is used as shamt[5]
         let funct7_rv64 = (insn & 0xfc000000) >> 26;
         let funct5 = (insn & 0xf8000000) >> 27;
-        // log::debug!("decode: 0x{word:08X}");
-        println!("decode: 0x{insn:08x} at pc 0x{insn_pc:08x}");
         Ok(match opcode {
             0b0000011 => match funct3 {
                 0x0 => OpCode::new(insn, insn_pc, "LB", 24, 1),

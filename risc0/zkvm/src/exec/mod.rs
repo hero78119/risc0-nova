@@ -53,7 +53,8 @@ pub struct Executor<'a> {
     /// MemoryMonitor
     pub monitor: MemoryMonitor,
     pre_pc: u64,
-    pc: u64,
+    /// program counter
+    pub pc: u64,
     anonymous_heap_watermark: u64,
     // segments: Vec<Segment>,
     insn_counter: u32,
@@ -124,9 +125,13 @@ impl<'a> Executor<'a> {
     }
 
     /// Construct a new [Executor] from an ELF binary.
-    pub fn from_elf(env: ExecutorEnv<'a>, elf: &[u8]) -> Result<Self> {
+    pub fn from_elf(
+        env: ExecutorEnv<'a>,
+        elf: &[u8],
+        memory_data: Option<Vec<u8>>,
+    ) -> Result<Self> {
         let program = Program::load_elf(&elf, MEM_SIZE as u64)?;
-        let image = MemoryImage::new(&program, PAGE_SIZE as u64);
+        let image = MemoryImage::new(&program, PAGE_SIZE as u64, memory_data);
         Ok(Self::new(env, image, program.entry))
     }
 
@@ -195,11 +200,13 @@ impl<'a> Executor<'a> {
             self.ecall()?
         } else {
             let registers = self.monitor.load_registers(array::from_fn(|idx| idx));
-            // if self.pc >= 0x00011ad4 && self.pc <= 0x00011ad4 {
-            //     registers.iter().enumerate().for_each(|(idx, value)| {
-            //         println!("value loaded {:08x}, idx: {:?}", value, idx,);
-            //     });
-            // }
+            if self.pc >= 0x00073138 && self.pc <= 0x000731fc {
+                let pc = self.pc;
+                println!("decode: 0x{insn:08x} at pc 0x{pc:08x}");
+                registers.iter().enumerate().for_each(|(idx, value)| {
+                    println!("value loaded {:08x}, idx: {:?}", value, idx,);
+                });
+            }
             let mut hart = HartState {
                 registers,
                 pc: self.pc,
@@ -308,6 +315,9 @@ impl<'a> Executor<'a> {
             ecall::SIGACTION => self.ecall_do_nth(),
             ecall::GETAFFINITY => self.ecall_do_nth(),
             ecall::CLOCKGETTIME => self.ecall_do_nth(),
+            ecall::MADVICE => self.ecall_do_nth(),
+            // return error so it will skip ratelimit set https://github.com/golang/go/blob/f5015b5164d6948266df74943f26c4007c6bea50/src/syscall/rlimit.go#L34
+            ecall::GETRLIMIT => self.ecall_do_return_error(-1i64 as u64),
             ecall => bail!("Unknown ecall {ecall:08x} in decimal {ecall:?}"),
         }
     }
@@ -359,6 +369,11 @@ impl<'a> Executor<'a> {
 
     fn ecall_do_nth(&mut self) -> Result<OpCodeResult> {
         self.monitor.store_register(REG_A0, 0u64);
+        Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
+    }
+
+    fn ecall_do_return_error(&mut self, error: u64) -> Result<OpCodeResult> {
+        self.monitor.store_register(REG_A0, error);
         Ok(OpCodeResult::new(self.pc + WORD_SIZE as u64, None, 0, None))
     }
 
@@ -461,8 +476,17 @@ impl<'a> Executor<'a> {
             })
             .collect();
         let key = str::from_utf8(&raw);
+        println!("ecall_open key {:?}", key);
         let result_code = match key {
-            Ok("hello") => 1000i64,
+            Ok(msg) => {
+                if msg.starts_with("DBG") {
+                    println!("open success {:?}", key);
+                    1000i64
+                } else {
+                    println!("open failed {:?}", key);
+                    -100i64
+                }
+            }
             _ => -100i64,
         };
 
@@ -471,15 +495,17 @@ impl<'a> Executor<'a> {
     }
 
     fn ecall_write(&mut self) -> Result<OpCodeResult> {
-        println!("got write!");
         let a0 = self.monitor.load_register(REG_A0);
         let a1 = self.monitor.load_register(REG_A1);
         let a2 = self.monitor.load_register(REG_A2);
         let a3 = self.monitor.load_register(REG_A3);
 
-        println!(
+        log::debug!(
             "ecall_write a0 {:16x}, a1 {:16x}, a2 {:16x}, a3 {:16x}",
-            a0, a1, a2, a3
+            a0,
+            a1,
+            a2,
+            a3
         );
 
         let raw: Vec<u8> = (0..a2)
@@ -491,10 +517,8 @@ impl<'a> Executor<'a> {
                     .unwrap() as u8
             })
             .collect();
-        println!(
-            "ecall_write res {:?}",
-            u64::from_le_bytes(raw.try_into().unwrap())
-        );
+
+        println!("ecall_write res {:?}", String::from_utf8_lossy(&raw));
 
         let value = self.monitor.load_register(REG_A2); // write A2 length to A0 return value as write convention
         self.monitor.store_register(REG_A0, value);

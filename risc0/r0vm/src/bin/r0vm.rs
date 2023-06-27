@@ -25,6 +25,10 @@ struct Args {
     #[clap(long)]
     elf: PathBuf,
 
+    /// The ELF file to run
+    #[clap(long)]
+    memory_data: Option<PathBuf>,
+
     /// Receipt output file.
     #[clap(long)]
     receipt: Option<PathBuf>,
@@ -47,6 +51,7 @@ fn main() {
 
     let args = Args::parse();
     let elf_contents = fs::read(&args.elf).unwrap();
+    let memory_data = args.memory_data.map(|path| fs::read(&path).unwrap());
 
     if args.verbose > 0 {
         eprintln!(
@@ -70,10 +75,11 @@ fn main() {
     }
 
     let env = builder.build();
-    let mut exec = Executor::from_elf(env, &elf_contents).unwrap();
+    let mut exec = Executor::from_elf(env, &elf_contents, memory_data).unwrap();
     let session = match exec.run() {
         Ok(session) => session,
         Err(err) => {
+            println!("failed at PC value {:08x}", exec.pc);
             let regs: [u64; 32] = exec.monitor.load_registers(array::from_fn(|idx| idx));
             regs.iter().enumerate().for_each(|(idx, value)| {
                 println!("value loaded {:08x}, idx: {:?}", value, idx,);

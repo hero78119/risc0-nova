@@ -106,7 +106,8 @@ impl Program {
                 // We need to patch this out, we don't pass float64nan because we don't support floats
                 | "runtime.initsig" // we dont need init signal since target on baremental env https://github.com/golang/go/blob/512361fb1fa805f10f183e0b96248e523e68c192/src/runtime/signal_unix.go#LL114C6-L114C13
                 | "runtime.check"
-                | "runtime.doInit"  // patch out doInit https://github.com/golang/go/blob/512361fb1fa805f10f183e0b96248e523e68c192/src/runtime/proc.go#L198, since it got float point inside
+                | "runtime.init"  // patch out init, with float point initialization
+                // | "runtime.doInit1"  // patch out doInit https://github.com/golang/go/blob/512361fb1fa805f10f183e0b96248e523e68c192/src/runtime/proc.go#L198, since it got float point inside
                 // | "runtime.lock2" // another choice is implement lock, which just need to implement `amoswap.w.aq`,
                 // | "runtime.args"
                 // | "runtime.osinit"

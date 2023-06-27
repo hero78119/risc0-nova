@@ -34,12 +34,14 @@ pub mod ecall {
     pub const SIGACTION: u64 = 134;
     pub const SIGPROCMASK: u64 = 135;
 
+    pub const GETRLIMIT: u64 = 163;
     pub const GETTID: u64 = 178;
     pub const GETAFFINITY: u64 = 123;
     pub const MMAP: u64 = 222;
     pub const MUNMAP: u64 = 215;
 
     pub const MINCORE: u64 = 232;
+    pub const MADVICE: u64 = 233;
 }
 
 pub mod halt {

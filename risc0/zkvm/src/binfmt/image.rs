@@ -48,7 +48,7 @@ impl MemoryImage {
     /// The result is a MemoryImage with the ELF of `program` loaded (but
     /// execution not yet begun), and with the page table Merkle tree
     /// constructed.
-    pub fn new(program: &Program, page_size: u64) -> Self {
+    pub fn new(program: &Program, page_size: u64, memory_data: Option<Vec<u8>>) -> Self {
         // let mut buf = vec![0_u8; MEM_SIZE];
 
         let mut memory_space = MemorySpace::new();
@@ -64,14 +64,38 @@ impl MemoryImage {
         for (addr, data) in program.image.iter() {
             program_region.write_mem(*addr, MemAccessSize::Word, u64::from(*data));
         }
-        // add memory region `0xd000000000` as playground
+        // add memory region `0xd0000deadbeef` as playground
         let _ = memory_space
             .add_memory(
-                0xd000000000,
+                0xd0000deadbee0,
                 MEM_SIZE as u64,
                 Box::new(VecMemory::new(vec![0_u64; MEM_SIZE / 8])),
             )
             .unwrap();
+
+        // Load the ELF into the memory image.
+        let _ = memory_data.map(|memory_data| {
+            println!("first length {:?}", memory_data[..4].to_vec());
+            let memory_data = memory_data
+                .chunks(8)
+                .map(|chunk| {
+                    let mut chunk = chunk.to_vec();
+                    if chunk.len() < 8 {
+                        chunk.resize(8, 0)
+                    }
+                    u64::from_le_bytes(chunk.try_into().unwrap())
+                })
+                .collect::<Vec<u64>>();
+            // memory data space
+            let _ = memory_space
+                .add_memory(
+                    0x100000000000,
+                    memory_data.len() as u64 * 8 as u64,
+                    Box::new(VecMemory::new(memory_data)),
+                )
+                .unwrap();
+        });
+
         // Compute the page table hashes except for the very last root hash.
         Self { memory_space }
     }
